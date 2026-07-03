@@ -22,7 +22,7 @@ node ./cc/cli.js --version           # 2.1.185 (Claude Code)
 
 ## Pourquoi
 
-Exécuter Claude Code là où le binaire officiel ne le peut pas : des systèmes anciens ou contraints où le binaire Bun signé ou un Node trop récent refuse de démarrer — un MacBook macOS 11 Intel (le Node 24+ précompilé meurt avec une erreur libc++), un Linux ancien ou minimal (glibc ancienne ; le ripgrep embarqué est le build statique musl), ou des machines figées sur un vieux Node (images d'entreprise, politiques LTS, bases CI). Le `cli.js` produit par cc2node s'exécute sur tous ces environnements (Node 18+).
+Exécuter Claude Code là où le binaire officiel ne le peut pas : des systèmes anciens ou contraints où le binaire Bun signé ou un Node trop récent refuse de démarrer, par exemple, un MacBook macOS 11 Intel (le Node 24+ précompilé meurt avec une erreur libc++), un Linux ancien ou minimal (glibc ancienne ; le ripgrep embarqué est le build statique musl), ou des machines figées sur un vieux Node (images d'entreprise, politiques LTS, bases CI). Le `cli.js` produit par cc2node s'exécute sur tous ces environnements (Node 18+).
 
 Autres usages :
 

@@ -25,11 +25,7 @@ node ./cc/cli.js --version           # 2.1.185 (Claude Code)
 
 ## Why
 
-Run Claude Code where the official binary cannot: old or constrained systems where the signed Bun
-binary or a new-enough Node refuses to launch — a macOS 11 Intel MacBook (prebuilt Node 24+ dies with
-a libc++ error), old or minimal Linux (old glibc; the bundled ripgrep is the static musl build), or
-machines pinned to old Node (corporate images, LTS policies, CI bases). The `cli.js` cc2node emits
-runs on all of them (Node 18+).
+Run Claude Code where the official binary cannot: old or constrained systems where the signed Bun binary or a new-enough Node refuses to launch, for example, a macOS 11 Intel MacBook (prebuilt Node 24+ dies with a libc++ error), old or minimal Linux (old glibc; the bundled ripgrep is the static musl build), or machines pinned to old Node (corporate images, LTS policies, CI bases). The `cli.js` cc2node emits runs on all of them (Node 18+).
 
 Other uses:
 

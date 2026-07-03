@@ -1,19 +1,46 @@
 {
   "name": "cc2node",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Convert any Bun-compiled Claude Code release into a pure-Node build that runs on plain Node 18+ (no Bun). Built on unbunjs.",
-  "keywords": ["claude-code", "claude", "anthropic", "bun", "node", "unbun", "debun", "transpile", "cli"],
+  "keywords": [
+    "claude-code",
+    "claude",
+    "anthropic",
+    "bun",
+    "node",
+    "unbun",
+    "debun",
+    "transpile",
+    "cli"
+  ],
   "homepage": "https://github.com/cc-friend/cc2node#readme",
   "bugs": "https://github.com/cc-friend/cc2node/issues",
-  "repository": { "type": "git", "url": "git+https://github.com/cc-friend/cc2node.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cc-friend/cc2node.git"
+  },
   "license": "MIT",
   "author": "Tom Chen (tomchen.org)",
-  "bin": { "cc2node": "dist/cli.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "bin": {
+    "cc2node": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "engines": { "node": ">=18" },
-  "files": ["dist", "assets", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
@@ -33,7 +60,9 @@
     "push": true,
     "preBump": "npm run checkall",
     "postVerRepl": "npm install --package-lock-only --ignore-scripts",
-    "commitFiles": ["package-lock.json"]
+    "commitFiles": [
+      "package-lock.json"
+    ]
   },
   "dependencies": {
     "unbunjs": "^1.0.0",
