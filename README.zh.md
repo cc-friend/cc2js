@@ -12,12 +12,12 @@ Claude Code 2.1.112+ 以 [Bun](https://bun.sh) `--compile` 二进制形式发布
 
 ```sh
 # 把最新版 Claude Code 装成 PATH 上的 `cc2` 命令（或更新）：
-npx cc2node          # = cc2node latest --link
+npx cc2node          # = cc2node latest
 cc2 --version        # 例如 2.1.199 (Claude Code)
 
-# 或把某个具体版本转换到一个文件夹：
-npx cc2node 2.1.185                       # 或 npx cc2node latest
-node cc2node-2.1.185-*/cli.js --version   # 2.1.185 (Claude Code)
+# 或只转换到一个文件夹、不安装（-o = 不装）：
+npx cc2node 2.1.185 -o ./cc          # 或：npx cc2node latest -o ./cc
+node ./cc/cli.js --version           # 2.1.185 (Claude Code)
 ```
 
 ## 用途
@@ -40,7 +40,9 @@ node cc2node-2.1.185-*/cli.js --version   # 2.1.185 (Claude Code)
 
 ```
 cc2node [<version|latest|stable|tarball|binary>] [options]
-cc2node                  安装/更新最新版为 `cc2`（= cc2node latest --link）
+cc2node                  安装/更新最新版为 `cc2`（= cc2node latest）
+
+任何版本默认都会安装（装到 ~/.cc2node，作为 PATH 上的 `cc2`）；想要文件夹就加 -o。
 
 输入：
   <version>            例如 2.1.185，或 "latest" / "stable"。
@@ -48,12 +50,13 @@ cc2node                  安装/更新最新版为 `cc2`（= cc2node latest --li
   <tarball|binary>     一个 claude-*.tar.gz，或已解压出来的 Bun `claude` 二进制。
 
 选项：
-      --link[=<name>]  装到 ~/.cc2node 并在 PATH 上放一个 launcher（默认名：cc2）
+      --no-link        只转换到文件夹，不装 `cc2` 命令
+      --link-name <n>  给安装的命令起名（默认：cc2）
       --bin-dir <dir>  launcher 存放目录（默认：~/.local/bin；Windows 上为 %USERPROFILE%\.cc2node\bin）
-      --no-add-path    不把 bin 目录写进 PATH（默认：--link 时会写）
+      --no-add-path    不把 bin 目录写进 PATH（安装时；默认：会写）
   -t, --target <t>     转译目标（nodeXX，≥node18）；默认：跑 cc2node 的当前 Node
   -p, --platform <p>   目标平台（默认：当前主机）
-  -o, --out <dir>      输出目录（覆盖默认位置）
+  -o, --out <dir>      转换到 <dir>（隐含 --no-link，除非给了 --link-name）
   -f, --force          已缓存也重转；覆盖非本工具生成的同名 launcher
       --no-ripgrep     不打包 ripgrep
       --no-install     不在输出目录里 npm install 运行时依赖
@@ -63,9 +66,9 @@ cc2node                  安装/更新最新版为 `cc2`（= cc2node latest --li
 平台：linux-x64、linux-x64-musl、linux-arm64、linux-arm64-musl、darwin-x64、darwin-arm64、win32-x64、win32-arm64。
 ```
 
-输出目录包含 `cli.js`、`bun-shim.cjs`、`*.node` 原生插件、`rg`（Windows 上为 `rg.exe`）、一个 `package.json`，以及一个 `node_modules`（ws、undici、ajv、ajv-formats）。`cli.js` 运行于转译目标及更新的 Node（默认：你跑 cc2node 的那个 Node；要最可移植就用 `-t node18`）。配置从 `~/.claude` 读取，与官方构建一致。
+用 `-o <dir>`（或 `--no-link`）时，cc2node 转换到一个文件夹，内含 `cli.js`、`bun-shim.cjs`、`*.node` 原生插件、`rg`（Windows 上为 `rg.exe`）、一个 `package.json`，以及一个 `node_modules`（ws、undici、ajv、ajv-formats）。`cli.js` 运行于转译目标及更新的 Node（默认：你跑 cc2node 的那个 Node；要最可移植就用 `-t node18`）。配置从 `~/.claude` 读取，与官方构建一致。
 
-用 `--link`（以及裸 `cc2node` 快捷方式）时，产物改放到 `~/.cc2node/versions/`，并放一个 launcher（默认 `cc2`）到 `~/.local/bin`（Windows 上是 `cc2.cmd` + `cc2.ps1` + 一个 Git Bash 用的 `cc2`，位于 `%USERPROFILE%\.cc2node\bin`）。若该目录还不在 PATH 上，cc2node 会替你加进去 —— Windows 写用户级 PATH（走环境变量 API，不是 `setx`），bash/zsh 写对应 rc —— 然后你开一个新终端即可生效（已经开着的终端任何进程都改不了）。它不会重复添加，也不动本来就能用的 PATH；`--no-add-path` 可关掉（改为只打印那一行），fish/tcsh 则始终给你一条正确语法的手动命令。
+默认（不带 `-o`）时，产物放到 `~/.cc2node/versions/`，并放一个 launcher（默认 `cc2`）到 `~/.local/bin`（Windows 上是 `cc2.cmd` + `cc2.ps1` + 一个 Git Bash 用的 `cc2`，位于 `%USERPROFILE%\.cc2node\bin`）。若该目录还不在 PATH 上，cc2node 会替你加进去 —— Windows 写用户级 PATH（走环境变量 API，不是 `setx`），bash/zsh 写对应 rc —— 然后你开一个新终端即可生效（已经开着的终端任何进程都改不了）。它不会重复添加，也不动本来就能用的 PATH；`--no-add-path` 可关掉（改为只打印那一行），fish/tcsh 则始终给你一条正确语法的手动命令。
 
 ## 工作原理
 

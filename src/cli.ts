@@ -2,7 +2,7 @@
 /*
  * cc2node — convert any Bun-compiled Claude Code release into a pure-Node build.
  *   cc2node [<version|latest|stable|tarball|binary>] [options]
- *   cc2node                # shortcut for `cc2node latest --link` (install/update `cc2`)
+ *   cc2node                # shortcut for `cc2node latest` (install/update `cc2`)
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,8 +18,8 @@ function pkgVersion(): string {
 
 export interface Args {
   _: string[];
-  link: boolean;
-  linkName: string;
+  linkName: string | null; // --link-name <name>: rename the command (null ⇒ default "cc2")
+  noLink: boolean; // --no-link: just convert to a folder, install no command
   binDir: string | null;
   target: string | null;
   platform: string | null;
@@ -36,8 +36,8 @@ export interface Args {
 export function parseArgs(argv: string[]): Args {
   const a: Args = {
     _: [],
-    link: false,
-    linkName: 'cc2',
+    linkName: null,
+    noLink: false,
     binDir: null,
     target: null,
     platform: null,
@@ -61,8 +61,11 @@ export function parseArgs(argv: string[]): Args {
       case '--version':
         a.version = true;
         break;
-      case '--link':
-        a.link = true;
+      case '--no-link':
+        a.noLink = true;
+        break;
+      case '--link-name':
+        a.linkName = argv[++i];
         break;
       case '--bin-dir':
         a.binDir = argv[++i];
@@ -99,10 +102,8 @@ export function parseArgs(argv: string[]): Args {
         a.keepTemp = true;
         break;
       default:
-        if (x.startsWith('--link=')) {
-          a.link = true;
-          a.linkName = x.slice(7);
-        } else if (x.startsWith('--bin-dir=')) a.binDir = x.slice(10);
+        if (x.startsWith('--link-name=')) a.linkName = x.slice(12);
+        else if (x.startsWith('--bin-dir=')) a.binDir = x.slice(10);
         else if (x.startsWith('--target=')) a.target = x.slice(9);
         else if (x.startsWith('--platform=')) a.platform = x.slice(11);
         else if (x.startsWith('--out=')) a.out = x.slice(6);
@@ -127,6 +128,15 @@ export function defaultTarget(major = Number.parseInt(process.versions.node.spli
   return 'node' + Math.max(18, major);
 }
 
+// Whether to install+link (vs just convert to a folder). Link is the default.
+// --no-link opts out; --link-name (naming the command) implies you want it
+// linked (so it wins even with -o); otherwise a bare -o means "give me a folder".
+export function resolveDoLink(args: Args): boolean {
+  if (args.noLink) return false;
+  if (args.linkName != null) return true;
+  return args.out == null;
+}
+
 function help(): void {
   const binDefault = process.platform === 'win32' ? '%USERPROFILE%\\.cc2node\\bin' : '~/.local/bin';
   process.stdout.write(
@@ -135,13 +145,16 @@ function help(): void {
       ' — Bun-compiled Claude Code → pure Node\n\n' +
       'Usage:\n' +
       '  cc2node [<version|latest|stable|tarball|binary>] [options]\n' +
-      '  cc2node                  install/update the latest as `cc2` (= cc2node latest --link)\n\n' +
+      '  cc2node                  install/update the latest Claude Code as `cc2` (= cc2node latest)\n\n' +
+      'By default cc2node installs to ~/.cc2node and puts a `cc2` command on PATH.\n' +
+      'Pass -o (or --no-link) to just convert into a folder instead.\n\n' +
       'Options:\n' +
-      '      --link[=<name>]      install to ~/.cc2node and put a launcher on PATH (default name: cc2)\n' +
+      '      --no-link            just convert to a folder; install no `cc2` command\n' +
+      '      --link-name <name>   name the installed command (default: cc2)\n' +
       '      --bin-dir <dir>      where the launcher goes (default: ' +
       binDefault +
       ')\n' +
-      '      --no-add-path        do not persist the bin dir onto PATH (with --link; default: do)\n' +
+      '      --no-add-path        do not persist the bin dir onto PATH (when linking; default: do)\n' +
       '  -t, --target <nodeXX>    transpile target, node18+ (default: this Node, ' +
       defaultTarget() +
       ')\n' +
@@ -149,7 +162,7 @@ function help(): void {
       '                           one of: ' +
       PLATFORMS.join(', ') +
       '\n' +
-      '  -o, --out <dir>          output directory (overrides the default location)\n' +
+      '  -o, --out <dir>          convert into <dir> (implies --no-link unless --link-name given)\n' +
       '  -f, --force              re-convert even if cached; overwrite a foreign launcher\n' +
       '      --no-ripgrep         do not bundle ripgrep\n' +
       '      --no-install         do not npm install runtime deps into the output\n' +
@@ -189,9 +202,9 @@ function main(): void {
     process.exit(2);
   }
 
-  const bare = args._.length === 0; // `cc2node` with no input
-  const input = args._[0] ?? 'latest';
-  const doLink = args.link || bare; // bare ⇒ latest --link
+  const input = args._[0] ?? 'latest'; // bare `cc2node` ⇒ latest
+  const doLink = resolveDoLink(args); // link by default, unless -o / --no-link
+  const linkName = args.linkName ?? 'cc2';
 
   const fail = (e: unknown) => {
     log.err((e as Error).message);
@@ -203,10 +216,10 @@ function main(): void {
     if (args.platform && args.platform !== hostPlatform()) {
       log.warn('linking a ' + platform + ' build; it will not run on this host (' + hostPlatform() + ')');
     }
-    if (!args.install) log.warn('--no-install with --link: the linked command will lack runtime deps');
+    if (!args.install) log.warn('--no-install while linking: the linked command will lack runtime deps');
     install({
       input,
-      name: args.linkName,
+      name: linkName,
       platform,
       target,
       binDir: args.binDir ?? undefined,
@@ -219,17 +232,13 @@ function main(): void {
       log
     })
       .then((r) => {
-        log.ok(
-          args.linkName + ' → ' + r.launcherPath + '  [Claude Code ' + r.version + (r.cached ? ', cached' : '') + ']'
-        );
+        log.ok(linkName + ' → ' + r.launcherPath + '  [Claude Code ' + r.version + (r.cached ? ', cached' : '') + ']');
         if (!r.onPath) {
           const dir = path.dirname(r.launcherPath);
           const ap = r.addPath;
           if (ap?.changed) {
             log.ok('added to PATH (' + ap.target + ')');
-            log.warn(
-              'open a NEW terminal to use ' + args.linkName + (ap.activate ? ', or run now:  ' + ap.activate : '')
-            );
+            log.warn('open a NEW terminal to use ' + linkName + (ap.activate ? ', or run now:  ' + ap.activate : ''));
           } else if (ap?.ok) {
             log.warn(
               dir +
@@ -247,7 +256,7 @@ function main(): void {
             }
           }
         }
-        log.step('run:  ' + args.linkName + ' --version');
+        log.step('run:  ' + linkName + ' --version');
         process.exit(0);
       })
       .catch(fail);

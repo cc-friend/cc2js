@@ -12,12 +12,12 @@ Claude Code 2.1.112+ est distribué sous forme de binaire [Bun](https://bun.sh) 
 
 ```sh
 # installer / mettre à jour le dernier Claude Code comme commande `cc2` sur le PATH :
-npx cc2node          # = cc2node latest --link
+npx cc2node          # = cc2node latest
 cc2 --version        # p. ex. 2.1.199 (Claude Code)
 
-# ou convertir une version précise dans un dossier :
-npx cc2node 2.1.185                       # Ou npx cc2node latest
-node cc2node-2.1.185-*/cli.js --version   # 2.1.185 (Claude Code)
+# ou seulement convertir une version dans un dossier, sans installer (-o = ne pas installer) :
+npx cc2node 2.1.185 -o ./cc          # Ou : npx cc2node latest -o ./cc
+node ./cc/cli.js --version           # 2.1.185 (Claude Code)
 ```
 
 ## Pourquoi
@@ -40,7 +40,9 @@ Les addons natifs et `rg` sont spécifiques à la plateforme ; construisez donc 
 
 ```
 cc2node [<version|latest|stable|tarball|binary>] [options]
-cc2node                  installer/mettre à jour le dernier en `cc2` (= cc2node latest --link)
+cc2node                  installer/mettre à jour le dernier en `cc2` (= cc2node latest)
+
+Toute version s'installe par défaut (dans ~/.cc2node, en `cc2` sur le PATH) ; passez -o pour un dossier.
 
 Entrée :
   <version>            p. ex. 2.1.185, ou "latest" / "stable".
@@ -48,12 +50,13 @@ Entrée :
   <tarball|binary>     un claude-*.tar.gz ou un binaire Bun `claude` déjà extrait.
 
 Options :
-      --link[=<name>]  installe dans ~/.cc2node et met un lanceur sur le PATH (nom par défaut : cc2)
+      --no-link        seulement convertir dans un dossier ; n'installe aucune commande `cc2`
+      --link-name <n>  nommer la commande installée (par défaut : cc2)
       --bin-dir <dir>  où va le lanceur (par défaut : ~/.local/bin, ou %USERPROFILE%\.cc2node\bin sous Windows)
-      --no-add-path    ne pas ajouter le dossier bin au PATH (par défaut : l'ajouter, avec --link)
+      --no-add-path    ne pas ajouter le dossier bin au PATH (à l'installation ; par défaut : l'ajouter)
   -t, --target <t>     cible de transpilation (nodeXX, ≥ node18) ; défaut : le Node qui exécute cc2node
   -p, --platform <p>   plateforme cible (par défaut : cet hôte)
-  -o, --out <dir>      répertoire de sortie (remplace l'emplacement par défaut)
+  -o, --out <dir>      convertir dans <dir> (implique --no-link sauf si --link-name est donné)
   -f, --force          reconvertir même si en cache ; écraser un lanceur étranger
       --no-ripgrep     ne pas embarquer ripgrep
       --no-install     ne pas npm install les dépendances d'exécution dans la sortie
@@ -63,9 +66,9 @@ Options :
 Plateformes : linux-x64, linux-x64-musl, linux-arm64, linux-arm64-musl, darwin-x64, darwin-arm64, win32-x64, win32-arm64.
 ```
 
-Le répertoire de sortie contient `cli.js`, `bun-shim.cjs`, les addons `*.node`, `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2node ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
+Avec `-o <dir>` (ou `--no-link`), cc2node convertit dans un dossier contenant `cli.js`, `bun-shim.cjs`, les addons `*.node`, `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2node ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
 
-Avec `--link` (et le raccourci `cc2node` sans argument), le build va plutôt dans `~/.cc2node/versions/` et un lanceur (par défaut `cc2`) est placé dans `~/.local/bin` (sous Windows : `cc2.cmd` + `cc2.ps1` + un `cc2` pour Git Bash, dans `%USERPROFILE%\.cc2node\bin`). Si ce dossier n'est pas déjà sur votre PATH, cc2node l'y ajoute pour vous — le PATH utilisateur Windows (via l'API d'environnement, pas `setx`), ou votre rc bash/zsh — puis vous ouvrez un nouveau terminal pour qu'il soit pris en compte (aucun processus ne peut modifier un shell déjà ouvert). Il n'ajoute jamais de doublon et laisse intact un PATH déjà fonctionnel ; `--no-add-path` le désactive (affiche la ligne à la place), et fish/tcsh reçoivent toujours une commande manuelle correcte.
+Par défaut (sans `-o`), le build va dans `~/.cc2node/versions/` et un lanceur (par défaut `cc2`) est placé dans `~/.local/bin` (sous Windows : `cc2.cmd` + `cc2.ps1` + un `cc2` pour Git Bash, dans `%USERPROFILE%\.cc2node\bin`). Si ce dossier n'est pas déjà sur votre PATH, cc2node l'y ajoute pour vous — le PATH utilisateur Windows (via l'API d'environnement, pas `setx`), ou votre rc bash/zsh — puis vous ouvrez un nouveau terminal pour qu'il soit pris en compte (aucun processus ne peut modifier un shell déjà ouvert). Il n'ajoute jamais de doublon et laisse intact un PATH déjà fonctionnel ; `--no-add-path` le désactive (affiche la ligne à la place), et fish/tcsh reçoivent toujours une commande manuelle correcte.
 
 ## Fonctionnement
 

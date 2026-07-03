@@ -15,12 +15,12 @@ to a single Node-18-compatible `cli.js`, and bundles ripgrep plus the runtime de
 
 ```sh
 # install / update the latest Claude Code as a `cc2` command on your PATH:
-npx cc2node          # = cc2node latest --link
+npx cc2node          # = cc2node latest
 cc2 --version        # e.g. 2.1.199 (Claude Code)
 
-# or convert a specific version into a folder:
-npx cc2node 2.1.185                       # Or npx cc2node latest
-node cc2node-2.1.185-*/cli.js --version   # 2.1.185 (Claude Code)
+# or just convert a version into a folder instead of installing (-o = don't install):
+npx cc2node 2.1.185 -o ./cc          # Or: npx cc2node latest -o ./cc
+node ./cc/cli.js --version           # 2.1.185 (Claude Code)
 ```
 
 ## Why
@@ -48,7 +48,9 @@ JavaScript core is platform-independent.
 
 ```
 cc2node [<version|latest|stable|tarball|binary>] [options]
-cc2node                  install/update the latest as `cc2` (= cc2node latest --link)
+cc2node                  install/update the latest as `cc2` (= cc2node latest)
+
+Any version installs by default (to ~/.cc2node, as `cc2` on PATH); pass -o to get a folder instead.
 
 Input:
   <version>            e.g. 2.1.185, or "latest" / "stable".
@@ -56,12 +58,13 @@ Input:
   <tarball|binary>     a claude-*.tar.gz or an already-extracted Bun `claude` binary.
 
 Options:
-      --link[=<name>]  install to ~/.cc2node and add a launcher to PATH (default name: cc2)
+      --no-link        just convert to a folder; install no `cc2` command
+      --link-name <n>  name the installed command (default: cc2)
       --bin-dir <dir>  where the launcher goes (default: ~/.local/bin, or %USERPROFILE%\.cc2node\bin on Windows)
-      --no-add-path    don't persist the bin dir onto PATH (default: do, with --link)
+      --no-add-path    don't persist the bin dir onto PATH (when linking; default: do)
   -t, --target <t>     transpile target (nodeXX, node18+); default: the Node running cc2node
   -p, --platform <p>   target platform (default: this host)
-  -o, --out <dir>      output directory (overrides the default location)
+  -o, --out <dir>      convert into <dir> (implies --no-link unless --link-name given)
   -f, --force          re-convert even if cached; overwrite a foreign launcher
       --no-ripgrep     do not bundle ripgrep
       --no-install     do not npm install runtime deps into the output
@@ -71,12 +74,12 @@ Options:
 Platforms: linux-x64, linux-x64-musl, linux-arm64, linux-arm64-musl, darwin-x64, darwin-arm64, win32-x64, win32-arm64.
 ```
 
-The output directory contains `cli.js`, `bun-shim.cjs`, the `*.node` addons, `rg` (`rg.exe` on Windows), a `package.json`,
+With `-o <dir>` (or `--no-link`) cc2node converts into a folder containing `cli.js`, `bun-shim.cjs`, the `*.node` addons, `rg` (`rg.exe` on Windows), a `package.json`,
 and a `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` runs on the transpile target and newer
 (default: the Node you ran cc2node with; use `-t node18` for the most portable build). Config is read
 from `~/.claude`, like the official build.
 
-With `--link` (and the bare `cc2node` shortcut) the build instead goes to `~/.cc2node/versions/` and a
+By default (no `-o`) the build instead goes to `~/.cc2node/versions/` and a
 launcher (default `cc2`) lands in `~/.local/bin` (on Windows: `cc2.cmd` + `cc2.ps1` + a Git Bash `cc2`
 in `%USERPROFILE%\.cc2node\bin`). If that dir isn't already on your PATH, cc2node adds it for you — the
 Windows user PATH (via the environment API, not `setx`), or your bash/zsh rc — then you open a new

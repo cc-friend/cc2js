@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { defaultTarget, normalizeTarget, parseArgs } from '../src/cli';
+import { defaultTarget, normalizeTarget, parseArgs, resolveDoLink } from '../src/cli';
 
 test('parseArgs collects input + platform', () => {
   const a = parseArgs(['2.1.185', '-p', 'linux-x64']);
@@ -19,13 +19,22 @@ test('parseArgs rejects --no-transpile and --targets (plural)', () => {
   assert.throws(() => parseArgs(['x', '--targets', 'node18']), /unknown option/);
 });
 
-test('parseArgs handles --link and --link=name', () => {
-  assert.equal(parseArgs(['--link']).link, true);
-  assert.equal(parseArgs(['--link']).linkName, 'cc2');
-  const a = parseArgs(['2.1.185', '--link=mycc']);
-  assert.equal(a.link, true);
-  assert.equal(a.linkName, 'mycc');
-  assert.equal(a._[0], '2.1.185');
+test('parseArgs handles --no-link and --link-name', () => {
+  assert.equal(parseArgs([]).noLink, false);
+  assert.equal(parseArgs([]).linkName, null);
+  assert.equal(parseArgs(['--no-link']).noLink, true);
+  assert.equal(parseArgs(['--link-name', 'mycc']).linkName, 'mycc');
+  assert.equal(parseArgs(['2.1.185', '--link-name=foo']).linkName, 'foo');
+  assert.throws(() => parseArgs(['--link']), /unknown option/); // old flag removed
+});
+
+test('resolveDoLink: link by default; -o means folder; flags win', () => {
+  assert.equal(resolveDoLink(parseArgs([])), true); // bare cc2node
+  assert.equal(resolveDoLink(parseArgs(['2.1.199'])), true); // version alone links
+  assert.equal(resolveDoLink(parseArgs(['2.1.199', '-o', 'out'])), false); // -o ⇒ folder
+  assert.equal(resolveDoLink(parseArgs(['2.1.199', '--no-link'])), false); // explicit off
+  assert.equal(resolveDoLink(parseArgs(['2.1.199', '-o', 'out', '--link-name', 'x'])), true); // naming forces link
+  assert.equal(resolveDoLink(parseArgs(['--no-link', '--link-name', 'x'])), false); // --no-link wins
 });
 
 test('parseArgs handles --target, --bin-dir, -f', () => {

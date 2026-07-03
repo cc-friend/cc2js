@@ -1,7 +1,7 @@
 /*
  * install: convert a release into the managed store (~/.cc2node/versions/<ver>-<plat>/)
- * and link it onto PATH as a command (default `cc2`). Powers `cc2node --link` and the
- * bare `cc2node` shortcut. Version inputs are cached (re-running skips re-conversion).
+ * and link it onto PATH as a command (default `cc2`). Powers the default install
+ * path (`cc2node` / `cc2node <version>`). Version inputs are cached (re-running skips re-conversion).
  */
 import fs from 'node:fs';
 import os from 'node:os';
