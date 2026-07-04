@@ -1,5 +1,5 @@
 /*
- * cc2node runtime polyfills — prepended to the transpiled Node 18/20/22 builds.
+ * cc2js runtime polyfills — prepended to the transpiled Node 18/20/22 builds.
  *
  * esbuild lowers modern *syntax* (e.g. `using` / `await using`) for the target,
  * but it cannot add missing *runtime methods*. The Claude Code bundle calls a few

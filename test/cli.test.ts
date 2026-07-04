@@ -31,7 +31,7 @@ test('parseArgs handles --no-link and --link-name', () => {
 });
 
 test('resolveDoLink: link by default; -o means folder; flags win', () => {
-  assert.equal(resolveDoLink(parseArgs([])), true); // bare cc2node
+  assert.equal(resolveDoLink(parseArgs([])), true); // bare cc2js
   assert.equal(resolveDoLink(parseArgs(['2.1.199'])), true); // version alone links
   assert.equal(resolveDoLink(parseArgs(['2.1.199', '-o', 'out'])), false); // -o ⇒ folder
   assert.equal(resolveDoLink(parseArgs(['2.1.199', '--no-link'])), false); // explicit off
@@ -92,7 +92,7 @@ test('runManage("clean") without --yes and no TTY rejects', async () => {
   Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
   try {
     await assert.rejects(
-      runManage('clean', parseArgs(['clean', '--bin-dir', path.join(os.tmpdir(), 'cc2node-nope')])),
+      runManage('clean', parseArgs(['clean', '--bin-dir', path.join(os.tmpdir(), 'cc2js-nope')])),
       /confirm|--yes/i
     );
   } finally {

@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const PATH_MARKER = '# cc2node (PATH)';
+export const PATH_MARKER = '# cc2js (PATH)';
 
 export interface AddPathResult {
   ok: boolean; // dir is now persistently on PATH (added this run, or already was)

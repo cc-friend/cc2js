@@ -1,36 +1,56 @@
-# cc2node
+# cc2js
 
-[![npm](https://img.shields.io/npm/v/cc2node.svg)](https://www.npmjs.com/package/cc2node)
-[![ci](https://github.com/cc-friend/cc2node/actions/workflows/ci.yml/badge.svg)](https://github.com/cc-friend/cc2node/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/cc2js.svg)](https://www.npmjs.com/package/cc2js)
+[![ci](https://github.com/cc-friend/cc2js/actions/workflows/ci.yml/badge.svg)](https://github.com/cc-friend/cc2js/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **English** | [中文](README.zh.md) | [Français](README.fr.md)
 
-Convert any Bun-compiled Claude Code release into a pure Node.js build that runs on plain **Node 18+**. No Bun runtime required. Built on [unbun](https://github.com/cc-friend/unbun).
+This CLI tool can convert any Bun-compiled Claude Code binary into a pure JavaScript (Node.js) build that runs on plain **Node 18+**. No Bun runtime required. Built on [unbun](https://github.com/cc-friend/unbun).
 
-Claude Code 2.1.112+ ships as a [Bun](https://bun.sh) `--compile` binary. cc2node downloads it, parses the embedded module graph with unbun, de-buns the entry bundle so it runs under Node, transpiles it to a single Node-compatible `cli.js` (Node 18 minimum), and bundles ripgrep plus the runtime deps Bun provided natively.
+Anthropic's Claude Code 2.1.112+ ships as a [Bun](https://bun.sh) `--compile` binary. cc2js downloads it, parses the embedded module graph with unbun, de-buns the entry bundle so it runs under Node, transpiles it to a single Node-compatible `cli.js` (Node 18 minimum), and bundles ripgrep plus the runtime deps Bun provided natively.
+
+## Quick start
+
+Install cc2js globally (you must have Node.js first):
 
 ```sh
-# install / update the latest Claude Code as a `cc2` command on your PATH:
-npx cc2node          # = npx cc2node latest
-cc2                  # run the Claude Code cc2node just installed
-cc2 --version        # e.g. 2.1.199 (Claude Code)
+npm i -g cc2js
+```
 
-# or just convert a version into a folder instead of installing (-o = don't install):
-npx cc2node 2.1.185 -o ./cc          # Or: npx cc2node latest -o ./cc
-node ./cc/cli.js --version           # 2.1.185 (Claude Code)
+(Then run `cc2js` directly; or skip the install and use `npx cc2js` instead.)
 
-# bake flags into the launcher (kept across updates; --no-cc-flags clears):
-npx cc2node latest -- --dangerously-skip-permissions
+Install / update the latest Claude Code as a `cc2` command on your `PATH`:
 
-# list installed versions & links, or remove them:
-cc2node ls
-cc2node clean            # remove all; or: rm <version>, delink [name]
+```sh
+cc2js        # = cc2js latest --link-name cc2
+cc2            # run the Claude Code cc2js just installed
+cc2 --version  # e.g. 2.1.199 (Claude Code)
+```
+
+Or just convert a version into a folder instead of installing (`-o` = don't install):
+
+```sh
+cc2js 2.1.185 -o ./cc
+node ./cc/cli.js --version  # 2.1.185 (Claude Code)
+```
+
+Bake flags into the launcher (kept across updates; `--no-cc-flags` clears):
+
+```sh
+cc2js latest -- --dangerously-skip-permissions
+```
+
+List installed versions & links, or remove them:
+
+```sh
+cc2js ls
+cc2js clean  # remove all; or: rm <version>, delink [name]
 ```
 
 ## Why
 
-Run Claude Code where the official binary cannot: old or constrained systems where the signed Bun binary or a new-enough Node refuses to launch, for example, a macOS 11 Intel MacBook (prebuilt Node 24+ dies with a libc++ error), old or minimal Linux (old glibc; the bundled ripgrep is the static musl build), or machines pinned to old Node (corporate images, LTS policies, CI bases). The `cli.js` cc2node emits runs on all of them (Node 18+).
+Run Claude Code where the official binary cannot: old or constrained systems where the signed Bun binary or a new-enough Node refuses to launch, for example, a macOS 11 Intel MacBook (prebuilt Node 24+ dies with a libc++ error), old or minimal Linux (old glibc; the bundled ripgrep is the static musl build), or machines pinned to old Node (corporate images, LTS policies, CI bases). The `cli.js` cc2js emits runs on all of them (Node 18+).
 
 Other uses:
 
@@ -46,12 +66,14 @@ Native addons and `rg` are platform-specific, so build with `--platform` for you
 
 ## Usage
 
-```
-cc2node [<version|latest|stable|tarball|binary>] [options]
-cc2node                  install/update the latest as `cc2` (= cc2node latest)
-cc2node ls | rm <version> | delink [name] | clean   manage installed versions & links
+`npm i -g cc2js` to install, then:
 
-Any version installs by default (to ~/.cc2node, as `cc2` on PATH); pass -o to get a folder instead.
+```
+cc2js [<version|latest|stable|tarball|binary>] [options]
+cc2js                  install/update the latest as `cc2` (= cc2js latest)
+cc2js ls | rm <version> | delink [name] | clean   manage installed versions & links
+
+Any version installs by default (to ~/.cc2js, as `cc2` on PATH); pass -o to get a folder instead.
 
 Input:
   <version>            e.g. 2.1.185, or "latest" / "stable".
@@ -61,9 +83,9 @@ Input:
 Options:
       --no-link        just convert to a folder; install no `cc2` command
       --link-name <n>  name the installed command (default: cc2)
-      --bin-dir <dir>  where the launcher goes (default: ~/.local/bin, or %USERPROFILE%\.cc2node\bin on Windows)
+      --bin-dir <dir>  where the launcher goes (default: ~/.local/bin, or %USERPROFILE%\.cc2js\bin on Windows)
       --no-add-path    don't persist the bin dir onto PATH (when linking; default: do)
-  -t, --target <t>     transpile target (nodeXX, node18+); default: the Node running cc2node
+  -t, --target <t>     transpile target (nodeXX, node18+); default: the Node running cc2js
   -p, --platform <p>   target platform (default: this host)
   -o, --out <dir>      convert into <dir> (implies --no-link unless --link-name given)
   -f, --force          re-convert even if cached; overwrite a foreign launcher
@@ -77,16 +99,16 @@ Options:
 Platforms: linux-x64, linux-x64-musl, linux-arm64, linux-arm64-musl, darwin-x64, darwin-arm64, win32-x64, win32-arm64.
 
 Management:
-  cc2node ls             list installed versions + links
-  cc2node rm <version>   remove a version (cascades delink)
-  cc2node delink [name]  remove a launcher (default: cc2)
-  cc2node clean          remove all versions + links (prompts y/N, or --yes)
+  cc2js ls             list installed versions + links
+  cc2js rm <version>   remove a version (cascades delink)
+  cc2js delink [name]  remove a launcher (default: cc2)
+  cc2js clean          remove all versions + links (prompts y/N, or --yes)
   (all accept --bin-dir <dir>)
 ```
 
-With `-o <dir>` (or `--no-link`) cc2node converts into a folder containing `cli.js`, `bun-shim.cjs`, the `*.node` addons, `rg` (`rg.exe` on Windows), a `package.json`, and a `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` runs on the transpile target and newer (default: the Node you ran cc2node with; use `-t node18` for the most portable build). Config is read from `~/.claude`, like the official build.
+With `-o <dir>` (or `--no-link`) cc2js converts into a folder containing `cli.js`, `bun-shim.cjs`, the `*.node` addons, `rg` (`rg.exe` on Windows), a `package.json`, and a `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` runs on the transpile target and newer (default: the Node you ran cc2js with; use `-t node18` for the most portable build). Config is read from `~/.claude`, like the official build.
 
-By default (no `-o`) the build instead goes to `~/.cc2node/versions/` and a launcher (default `cc2`) lands in `~/.local/bin` (on Windows: `cc2.cmd` + `cc2.ps1` + a Git Bash `cc2` in `%USERPROFILE%\.cc2node\bin`). If that dir isn't already on your PATH, cc2node adds it for you — the Windows user PATH (via the environment API, not `setx`), or your bash/zsh rc — then you open a new terminal to pick it up (an already-open shell can't be changed by any process). It never adds a duplicate and leaves an already-working PATH untouched; `--no-add-path` opts out (prints the line instead), and fish/tcsh always get a correct manual line.
+By default (no `-o`) the build instead goes to `~/.cc2js/versions/` and a launcher (default `cc2`) lands in `~/.local/bin` (on Windows: `cc2.cmd` + `cc2.ps1` + a Git Bash `cc2` in `%USERPROFILE%\.cc2js\bin`). If that dir isn't already on your PATH, cc2js adds it for you — the Windows user PATH (via the environment API, not `setx`), or your bash/zsh rc — then you open a new terminal to pick it up (an already-open shell can't be changed by any process). It never adds a duplicate and leaves an already-working PATH untouched; `--no-add-path` opts out (prints the line instead), and fish/tcsh always get a correct manual line.
 
 Each install/update reports its outcome: `linked` (first time), `updated` (`old → new`), or `unchanged` (already current).
 
@@ -101,7 +123,7 @@ Each install/update reports its outcome: `linked` (first time), `updated` (`old 
 ## Library API
 
 ```ts
-import { convert } from 'cc2node';
+import { convert } from 'cc2js';
 
 const { version, outDir } = await convert({ input: '2.1.185', platform: 'linux-x64' });
 console.log(version, outDir);

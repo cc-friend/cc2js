@@ -7,7 +7,7 @@ import { linkLauncher } from '../src/link';
 import { clean, listLinks, listVersions, removeVersion } from '../src/manage';
 
 const isWin = process.platform === 'win32';
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2node-manage-'));
+const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-manage-'));
 
 function seedVersion(root: string, version: string, platform: string): string {
   const dir = path.join(root, version + '-' + platform);

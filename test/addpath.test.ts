@@ -5,7 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { addToRc, manualLineFor, pickRcFile, rcHasEntry, shellName, unixExportLine } from '../src/addpath';
 
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2node-path-'));
+const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-path-'));
 
 test('shellName takes the basename of $SHELL', () => {
   assert.equal(shellName('/usr/bin/zsh'), 'zsh');

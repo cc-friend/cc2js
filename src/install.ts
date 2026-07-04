@@ -1,7 +1,7 @@
 /*
- * install: convert a release into the managed store (~/.cc2node/versions/<ver>-<plat>/)
+ * install: convert a release into the managed store (~/.cc2js/versions/<ver>-<plat>/)
  * and link it onto PATH as a command (default `cc2`). Powers the default install
- * path (`cc2node` / `cc2node <version>`). Version inputs are cached (re-running skips re-conversion).
+ * path (`cc2js` / `cc2js <version>`). Version inputs are cached (re-running skips re-conversion).
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,10 +13,10 @@ import { linkLauncher, parseLauncher } from './link';
 import defaultLog, { type Logger } from './log';
 
 export function cc2Home(): string {
-  return path.join(os.homedir(), '.cc2node');
+  return path.join(os.homedir(), '.cc2js');
 }
 export function defaultBinDir(): string {
-  // ~/.local/bin is a Unix convention; on Windows use %USERPROFILE%\.cc2node\bin
+  // ~/.local/bin is a Unix convention; on Windows use %USERPROFILE%\.cc2js\bin
   // (alongside the versions store) since there is no equivalent default on PATH.
   if (process.platform === 'win32') return path.join(cc2Home(), 'bin');
   return path.join(os.homedir(), '.local', 'bin');

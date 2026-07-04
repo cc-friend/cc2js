@@ -1,9 +1,9 @@
 /*
- * cc2node E2E harness (manual; network + large downloads).
+ * cc2js E2E harness (manual; network + large downloads).
  *
  *   tsx test/e2e.ts [options]
  *
- * Converts each requested Claude Code version with cc2node (cached under
+ * Converts each requested Claude Code version with cc2js (cached under
  * test/.cache/<version>-<platform>), then runs the single produced cli.js under
  * every runnable Node major and checks `--version` prints "<version> (Claude Code)".
  *
@@ -198,9 +198,9 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   fs.mkdirSync(CACHE, { recursive: true });
 
-  // cc2node runs from dist/; build it before converting (unless only reading cache).
+  // cc2js runs from dist/; build it before converting (unless only reading cache).
   if (!args.noConvert) {
-    process.stdout.write('building cc2node (npm run build)...\n');
+    process.stdout.write('building cc2js (npm run build)...\n');
     cp.execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
   }
 
@@ -214,7 +214,7 @@ async function main(): Promise<void> {
 
   // ---- convert-only: just build + cache ----
   if (args.convertOnly) {
-    console.log('cc2node convert-only — ' + args.platform + ' — ' + versions.join(', '));
+    console.log('cc2js convert-only — ' + args.platform + ' — ' + versions.join(', '));
     let allOk = true;
     for (const v of versions) {
       const c = convertVersion(v, args.platform, args.force, false);
@@ -230,7 +230,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  console.log('cc2node e2e harness');
+  console.log('cc2js e2e harness');
   console.log('  platform : ' + args.platform);
   console.log('  versions : ' + versions.join(', '));
   console.log('  node     : ' + nodes.majors.map((m) => nodes.map[m].v).join(', '));

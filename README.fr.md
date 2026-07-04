@@ -1,36 +1,56 @@
-# cc2node
+# cc2js
 
-[![npm](https://img.shields.io/npm/v/cc2node.svg)](https://www.npmjs.com/package/cc2node)
-[![ci](https://github.com/cc-friend/cc2node/actions/workflows/ci.yml/badge.svg)](https://github.com/cc-friend/cc2node/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/cc2js.svg)](https://www.npmjs.com/package/cc2js)
+[![ci](https://github.com/cc-friend/cc2js/actions/workflows/ci.yml/badge.svg)](https://github.com/cc-friend/cc2js/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 [English](README.md) | [中文](README.zh.md) | **Français**
 
-Convertit n'importe quelle version de Claude Code compilée avec Bun en un build Node pur qui s'exécute sur un simple **Node 18+**. Aucun runtime Bun requis. Basé sur [unbun](https://github.com/cc-friend/unbun).
+Cet outil CLI peut convertir n'importe quel binaire de Claude Code compilé avec Bun en un build JavaScript pur (Node.js) qui s'exécute sur un simple **Node 18+**. Aucun runtime Bun requis. Basé sur [unbun](https://github.com/cc-friend/unbun).
 
-Claude Code 2.1.112+ est distribué sous forme de binaire [Bun](https://bun.sh) `--compile`. cc2node le télécharge, analyse le graphe de modules embarqué avec unbun, « de-bun » le bundle d'entrée pour qu'il s'exécute sous Node, le transpile en un unique `cli.js` compatible Node (Node 18 minimum), et embarque ripgrep ainsi que les dépendances d'exécution que Bun fournissait nativement.
+Claude Code 2.1.112+ d'Anthropic est distribué sous forme de binaire [Bun](https://bun.sh) `--compile`. cc2js le télécharge, analyse le graphe de modules embarqué avec unbun, « de-bun » le bundle d'entrée pour qu'il s'exécute sous Node, le transpile en un unique `cli.js` compatible Node (Node 18 minimum), et embarque ripgrep ainsi que les dépendances d'exécution que Bun fournissait nativement.
+
+## Démarrage rapide
+
+Installez cc2js globalement (vous devez d'abord avoir Node.js) :
 
 ```sh
-# installer / mettre à jour le dernier Claude Code comme commande `cc2` sur le PATH :
-npx cc2node          # = npx cc2node latest
-cc2                  # lancer le Claude Code que cc2node vient d'installer
-cc2 --version        # p. ex. 2.1.199 (Claude Code)
+npm i -g cc2js
+```
 
-# ou seulement convertir une version dans un dossier, sans installer (-o = ne pas installer) :
-npx cc2node 2.1.185 -o ./cc          # Ou : npx cc2node latest -o ./cc
-node ./cc/cli.js --version           # 2.1.185 (Claude Code)
+(Ensuite, lancez `cc2js` directement ; ou sautez l'installation et utilisez `npx cc2js` à la place.)
 
-# graver des flags dans le lanceur (conservés d'une mise à jour à l'autre ; --no-cc-flags les efface) :
-npx cc2node latest -- --dangerously-skip-permissions
+Installer / mettre à jour le dernier Claude Code comme commande `cc2` sur le `PATH` :
 
-# lister les versions et liens installés, ou tout supprimer :
-cc2node ls
-cc2node clean            # tout supprimer ; ou : rm <version>, delink [name]
+```sh
+cc2js        # = cc2js latest --link-name cc2
+cc2            # lancer le Claude Code que cc2js vient d'installer
+cc2 --version  # p. ex. 2.1.199 (Claude Code)
+```
+
+Ou seulement convertir une version dans un dossier, sans installer (`-o` = ne pas installer) :
+
+```sh
+cc2js 2.1.185 -o ./cc
+node ./cc/cli.js --version  # 2.1.185 (Claude Code)
+```
+
+Graver des flags dans le lanceur (conservés d'une mise à jour à l'autre ; `--no-cc-flags` les efface) :
+
+```sh
+cc2js latest -- --dangerously-skip-permissions
+```
+
+Lister les versions et liens installés, ou tout supprimer :
+
+```sh
+cc2js ls
+cc2js clean  # tout supprimer ; ou : rm <version>, delink [name]
 ```
 
 ## Pourquoi
 
-Exécuter Claude Code là où le binaire officiel ne le peut pas : des systèmes anciens ou contraints où le binaire Bun signé ou un Node trop récent refuse de démarrer, par exemple, un MacBook macOS 11 Intel (le Node 24+ précompilé meurt avec une erreur libc++), un Linux ancien ou minimal (glibc ancienne ; le ripgrep embarqué est le build statique musl), ou des machines figées sur un vieux Node (images d'entreprise, politiques LTS, bases CI). Le `cli.js` produit par cc2node s'exécute sur tous ces environnements (Node 18+).
+Exécuter Claude Code là où le binaire officiel ne le peut pas : des systèmes anciens ou contraints où le binaire Bun signé ou un Node trop récent refuse de démarrer, par exemple, un MacBook macOS 11 Intel (le Node 24+ précompilé meurt avec une erreur libc++), un Linux ancien ou minimal (glibc ancienne ; le ripgrep embarqué est le build statique musl), ou des machines figées sur un vieux Node (images d'entreprise, politiques LTS, bases CI). Le `cli.js` produit par cc2js s'exécute sur tous ces environnements (Node 18+).
 
 Autres usages :
 
@@ -46,12 +66,14 @@ Les addons natifs et `rg` sont spécifiques à la plateforme ; construisez donc 
 
 ## Utilisation
 
-```
-cc2node [<version|latest|stable|tarball|binary>] [options]
-cc2node                  installer/mettre à jour le dernier en `cc2` (= cc2node latest)
-cc2node ls | rm <version> | delink [name] | clean   gérer les versions et liens installés
+`npm i -g cc2js` pour installer, puis :
 
-Toute version s'installe par défaut (dans ~/.cc2node, en `cc2` sur le PATH) ; passez -o pour un dossier.
+```
+cc2js [<version|latest|stable|tarball|binary>] [options]
+cc2js                  installer/mettre à jour le dernier en `cc2` (= cc2js latest)
+cc2js ls | rm <version> | delink [name] | clean   gérer les versions et liens installés
+
+Toute version s'installe par défaut (dans ~/.cc2js, en `cc2` sur le PATH) ; passez -o pour un dossier.
 
 Entrée :
   <version>            p. ex. 2.1.185, ou "latest" / "stable".
@@ -61,9 +83,9 @@ Entrée :
 Options :
       --no-link        seulement convertir dans un dossier ; n'installe aucune commande `cc2`
       --link-name <n>  nommer la commande installée (par défaut : cc2)
-      --bin-dir <dir>  où va le lanceur (par défaut : ~/.local/bin, ou %USERPROFILE%\.cc2node\bin sous Windows)
+      --bin-dir <dir>  où va le lanceur (par défaut : ~/.local/bin, ou %USERPROFILE%\.cc2js\bin sous Windows)
       --no-add-path    ne pas ajouter le dossier bin au PATH (à l'installation ; par défaut : l'ajouter)
-  -t, --target <t>     cible de transpilation (nodeXX, ≥ node18) ; défaut : le Node qui exécute cc2node
+  -t, --target <t>     cible de transpilation (nodeXX, ≥ node18) ; défaut : le Node qui exécute cc2js
   -p, --platform <p>   plateforme cible (par défaut : cet hôte)
   -o, --out <dir>      convertir dans <dir> (implique --no-link sauf si --link-name est donné)
   -f, --force          reconvertir même si en cache ; écraser un lanceur étranger
@@ -77,16 +99,16 @@ Options :
 Plateformes : linux-x64, linux-x64-musl, linux-arm64, linux-arm64-musl, darwin-x64, darwin-arm64, win32-x64, win32-arm64.
 
 Gestion :
-  cc2node ls             lister les versions et liens installés
-  cc2node rm <version>   supprimer une version (délie en cascade)
-  cc2node delink [name]  supprimer un lanceur (par défaut : cc2)
-  cc2node clean          supprimer toutes les versions et liens (confirmation y/N, ou --yes)
+  cc2js ls             lister les versions et liens installés
+  cc2js rm <version>   supprimer une version (délie en cascade)
+  cc2js delink [name]  supprimer un lanceur (par défaut : cc2)
+  cc2js clean          supprimer toutes les versions et liens (confirmation y/N, ou --yes)
   (tous acceptent --bin-dir <dir>)
 ```
 
-Avec `-o <dir>` (ou `--no-link`), cc2node convertit dans un dossier contenant `cli.js`, `bun-shim.cjs`, les addons `*.node`, `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2node ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
+Avec `-o <dir>` (ou `--no-link`), cc2js convertit dans un dossier contenant `cli.js`, `bun-shim.cjs`, les addons `*.node`, `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2js ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
 
-Par défaut (sans `-o`), le build va dans `~/.cc2node/versions/` et un lanceur (par défaut `cc2`) est placé dans `~/.local/bin` (sous Windows : `cc2.cmd` + `cc2.ps1` + un `cc2` pour Git Bash, dans `%USERPROFILE%\.cc2node\bin`). Si ce dossier n'est pas déjà sur votre PATH, cc2node l'y ajoute pour vous — le PATH utilisateur Windows (via l'API d'environnement, pas `setx`), ou votre rc bash/zsh — puis vous ouvrez un nouveau terminal pour qu'il soit pris en compte (aucun processus ne peut modifier un shell déjà ouvert). Il n'ajoute jamais de doublon et laisse intact un PATH déjà fonctionnel ; `--no-add-path` le désactive (affiche la ligne à la place), et fish/tcsh reçoivent toujours une commande manuelle correcte.
+Par défaut (sans `-o`), le build va dans `~/.cc2js/versions/` et un lanceur (par défaut `cc2`) est placé dans `~/.local/bin` (sous Windows : `cc2.cmd` + `cc2.ps1` + un `cc2` pour Git Bash, dans `%USERPROFILE%\.cc2js\bin`). Si ce dossier n'est pas déjà sur votre PATH, cc2js l'y ajoute pour vous — le PATH utilisateur Windows (via l'API d'environnement, pas `setx`), ou votre rc bash/zsh — puis vous ouvrez un nouveau terminal pour qu'il soit pris en compte (aucun processus ne peut modifier un shell déjà ouvert). Il n'ajoute jamais de doublon et laisse intact un PATH déjà fonctionnel ; `--no-add-path` le désactive (affiche la ligne à la place), et fish/tcsh reçoivent toujours une commande manuelle correcte.
 
 Chaque installation/mise à jour indique son résultat : `linked` (première installation), `updated` (`old → new`), ou `unchanged` (déjà à jour).
 
@@ -101,7 +123,7 @@ Chaque installation/mise à jour indique son résultat : `linked` (première ins
 ## API de bibliothèque
 
 ```ts
-import { convert } from 'cc2node';
+import { convert } from 'cc2js';
 
 const { version, outDir } = await convert({ input: '2.1.185', platform: 'linux-x64' });
 console.log(version, outDir);

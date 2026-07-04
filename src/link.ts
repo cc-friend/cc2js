@@ -1,6 +1,6 @@
 /*
  * Install a launcher for a converted cli.js so a converted Claude Code runs as
- * e.g. `cc2`. Every file carries a `# cc2node launcher` marker so we only ever
+ * e.g. `cc2`. Every file carries a `# cc2js launcher` marker so we only ever
  * detect/overwrite our own (never clobber a foreign file without --force).
  *
  *   Unix (Linux/macOS): a single `#!/bin/sh` wrapper.
@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const MARKER = '# cc2node launcher';
+export const MARKER = '# cc2js launcher';
 
 function shQuote(s: string): string {
   return "'" + s.replace(/'/g, "'\\''") + "'";
@@ -26,7 +26,7 @@ function joinFlags(flags: string[], quote: (s: string) => string): string {
   return flags.length ? ' ' + flags.map(quote).join(' ') : '';
 }
 function flagsComment(flags: string[], open: string, eol: string): string {
-  return flags.length ? open + 'cc2node flags: ' + JSON.stringify(flags) + eol : '';
+  return flags.length ? open + 'cc2js flags: ' + JSON.stringify(flags) + eol : '';
 }
 
 export interface LinkOptions {
@@ -167,7 +167,7 @@ function guardOverwrite(file: string, force?: boolean): void {
       /* ignore */
     }
     if (!existing.includes(MARKER)) {
-      throw new Error(file + ' exists and is not a cc2node launcher — refusing to overwrite (use --force)');
+      throw new Error(file + ' exists and is not a cc2js launcher — refusing to overwrite (use --force)');
     }
   }
 }
@@ -225,7 +225,7 @@ export function parseLauncher(binDir: string, name: string): ParsedLauncher | nu
   const text = readIf(primaryPath);
   if (text == null || !text.includes(MARKER)) return null;
   const vp = text.match(/Claude Code (\S+) \(([^)]+)\)/);
-  const fm = text.match(/cc2node flags:\s*(\[.*\])/);
+  const fm = text.match(/cc2js flags:\s*(\[.*\])/);
   const tm = text.match(/^(?:exec )?node "([^"]+)"/m);
   let ccFlags: string[] = [];
   if (fm) {

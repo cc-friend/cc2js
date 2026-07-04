@@ -73,7 +73,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
   const doRipgrep = opts.ripgrep !== false;
   const target = opts.target || 'node18';
 
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc2node-'));
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-'));
   const cleanup = () => {
     if (opts.keepTemp) {
       log.info('kept temp dir ' + workDir);
@@ -110,7 +110,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     );
 
     // 3) output dir
-    const outDir = opts.out || path.resolve(process.cwd(), 'cc2node-' + version + '-' + platform);
+    const outDir = opts.out || path.resolve(process.cwd(), 'cc2js-' + version + '-' + platform);
     fs.mkdirSync(outDir, { recursive: true });
 
     // 4) de-bun + transpile to a single Node-18 cli.js
@@ -140,7 +140,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
       name: 'claude-code-' + version + '-node',
       version: '1.0.0',
       private: true,
-      description: 'Pure-Node build of Claude Code ' + version + ' (' + platform + '), de-bunned by cc2node.',
+      description: 'Pure-Node build of Claude Code ' + version + ' (' + platform + '), de-bunned by cc2js.',
       type: 'commonjs',
       bin: { claude: 'cli.js' },
       engines: { node: '>=18' },
@@ -183,7 +183,7 @@ function writeOutputReadme(outDir: string, version: string, platform: string): v
   const lines = [
     '# Claude Code ' + version + ' — pure-Node build (' + platform + ')',
     '',
-    'Produced by **cc2node** from the Bun-compiled `claude` binary. No Bun runtime required.',
+    'Produced by **cc2js** from the Bun-compiled `claude` binary. No Bun runtime required.',
     '',
     '```sh',
     'node cli.js --version',

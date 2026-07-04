@@ -61,7 +61,7 @@ function makeZip(entries: Entry[]): Buffer {
   return Buffer.concat([...locals, cd, eocd]);
 }
 
-const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2node-rg-'));
+const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-rg-'));
 
 test('unzip extracts store + deflate entries with exact bytes', () => {
   const dir = tmp();

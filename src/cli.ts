@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /*
- * cc2node — convert any Bun-compiled Claude Code release into a pure-Node build.
- *   cc2node [<version|latest|stable|tarball|binary>] [options]
- *   cc2node                # shortcut for `cc2node latest` (install/update `cc2`)
+ * cc2js — convert any Bun-compiled Claude Code release into a pure-Node build.
+ *   cc2js [<version|latest|stable|tarball|binary>] [options]
+ *   cc2js                # shortcut for `cc2js latest` (install/update `cc2`)
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -143,7 +143,7 @@ export function normalizeTarget(t: string): string {
   return 'node' + major;
 }
 
-// Default target = the Node running cc2node (>= 18), so the build fits this machine.
+// Default target = the Node running cc2js (>= 18), so the build fits this machine.
 export function defaultTarget(major = Number.parseInt(process.versions.node.split('.')[0], 10)): string {
   return 'node' + Math.max(18, major);
 }
@@ -158,16 +158,16 @@ export function resolveDoLink(args: Args): boolean {
 }
 
 function help(): void {
-  const binDefault = process.platform === 'win32' ? '%USERPROFILE%\\.cc2node\\bin' : '~/.local/bin';
+  const binDefault = process.platform === 'win32' ? '%USERPROFILE%\\.cc2js\\bin' : '~/.local/bin';
   process.stdout.write(
-    'cc2node ' +
+    'cc2js ' +
       pkgVersion() +
       ' — Bun-compiled Claude Code → pure Node\n\n' +
       'Usage:\n' +
-      '  cc2node [<version|latest|stable|tarball|binary>] [options]\n' +
-      '  cc2node                  install/update the latest Claude Code as `cc2` (= cc2node latest)\n' +
-      '  cc2node ls | rm <version> | delink [name] | clean   manage installed versions & links\n\n' +
-      'By default cc2node installs to ~/.cc2node and puts a `cc2` command on PATH.\n' +
+      '  cc2js [<version|latest|stable|tarball|binary>] [options]\n' +
+      '  cc2js                  install/update the latest Claude Code as `cc2` (= cc2js latest)\n' +
+      '  cc2js ls | rm <version> | delink [name] | clean   manage installed versions & links\n\n' +
+      'By default cc2js installs to ~/.cc2js and puts a `cc2` command on PATH.\n' +
       'Pass -o (or --no-link) to just convert into a folder instead.\n\n' +
       'Options:\n' +
       '      --no-link            just convert to a folder; install no `cc2` command\n' +
@@ -236,7 +236,7 @@ export async function runManage(sub: string, args: Args): Promise<void> {
   }
 
   if (sub === 'rm') {
-    if (!target) throw new Error('usage: cc2node rm <version>');
+    if (!target) throw new Error('usage: cc2js rm <version>');
     const r = removeVersion(target, versionsDir, binDir); // throws on unknown version
     for (const d of r.removed) log.ok('removed ' + d);
     for (const d of r.delinked) log.ok('delinked ' + d);
@@ -246,7 +246,7 @@ export async function runManage(sub: string, args: Args): Promise<void> {
   if (sub === 'delink') {
     const name = target ?? 'cc2';
     const removed = delinkLauncher(binDir, name);
-    if (!removed.length) throw new Error('no cc2node launcher named "' + name + '" in ' + binDir);
+    if (!removed.length) throw new Error('no cc2js launcher named "' + name + '" in ' + binDir);
     for (const p of removed) log.ok('delinked ' + p);
     return;
   }
@@ -254,7 +254,7 @@ export async function runManage(sub: string, args: Args): Promise<void> {
   // clean
   if (!args.yes) {
     if (!process.stdin.isTTY) throw new Error('refusing to clean without --yes (non-interactive)');
-    if (!(await confirm('Remove ALL cc2node versions and links? [y/N] '))) {
+    if (!(await confirm('Remove ALL cc2js versions and links? [y/N] '))) {
       log.info('aborted');
       return;
     }
@@ -313,7 +313,7 @@ function main(): void {
     process.exit(2);
   }
 
-  const input = args._[0] ?? 'latest'; // bare `cc2node` ⇒ latest
+  const input = args._[0] ?? 'latest'; // bare `cc2js` ⇒ latest
   const doLink = resolveDoLink(args); // link by default, unless -o / --no-link
   const linkName = args.linkName ?? 'cc2';
 

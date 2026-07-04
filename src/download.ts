@@ -62,7 +62,7 @@ export function downloadTo(url: string, dest: string, opts: DownloadOpts = {}): 
     const redirects = opts._redirects || 0;
     if (redirects > 10) return reject(new Error('too many redirects'));
     const lib: typeof http = url.startsWith('https:') ? (https as unknown as typeof http) : http;
-    const req = lib.get(url, { headers: { 'user-agent': 'cc2node', accept: '*/*' } }, (res) => {
+    const req = lib.get(url, { headers: { 'user-agent': 'cc2js', accept: '*/*' } }, (res) => {
       const status = res.statusCode ?? 0;
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume();
@@ -105,7 +105,7 @@ export function getText(url: string, redirects = 0): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (redirects > 10) return reject(new Error('too many redirects'));
     https
-      .get(url, { headers: { 'user-agent': 'cc2node', accept: '*/*' } }, (res) => {
+      .get(url, { headers: { 'user-agent': 'cc2js', accept: '*/*' } }, (res) => {
         const status = res.statusCode ?? 0;
         if (status >= 300 && status < 400 && res.headers.location) {
           res.resume();
