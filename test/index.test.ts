@@ -9,6 +9,7 @@ import './download.test';
 import './install.test';
 import './link.test';
 import './log.test';
+import './manage.test';
 import './ripgrep.test';
 import './transpile.test';
 import './version.test';
