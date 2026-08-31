@@ -4,20 +4,10 @@
  * `await using` — then prepends idempotent runtime polyfills esbuild cannot add
  * (Array.prototype.with, …). `target` is an esbuild node target, e.g. "node18".
  *
- * Uses esbuild-wasm (the WebAssembly build), not the native binary, so cc2js installs
- * and runs anywhere Node 18+ runs — including older macOS (10.15+), where the native
- * esbuild Go binary refuses to load (it links macOS 12+ symbols). Same transform API;
- * the only cost is a one-time initialize(). In Node it auto-loads its own bundled
- * esbuild.wasm — the wasmURL/wasmModule/worker options are browser-only and throw here.
+ * This is the tail of the pipeline for the single-bundle shape only; the
+ * code-split ESM shape is lowered by esbuild while bundling (see bundle.ts).
  */
-import * as esbuild from 'esbuild-wasm';
-
-// esbuild-wasm must be initialized once per process before transform().
-let ready: Promise<void> | undefined;
-function ensureReady(): Promise<void> {
-  if (!ready) ready = esbuild.initialize({});
-  return ready;
-}
+import { ensureReady, esbuild } from './esb';
 
 export async function transpile(debunnedSource: string, polyfills: string, target: string): Promise<string> {
   await ensureReady();

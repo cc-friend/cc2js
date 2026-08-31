@@ -58,7 +58,10 @@ interface Rec {
 
 function parseArgs(argv: string[]): Args {
   const a: Args = {
-    versions: ['2.1.113', '2.1.126', '2.1.153', '2.1.185', '2.1.191', 'latest'],
+    // Straddle the bundle-shape boundary on purpose: up to 2.1.235 the binary
+    // holds one self-contained CJS bundle, from 2.1.243 a code-split ESM graph.
+    // Keep a pinned version either side of it, not just `latest`.
+    versions: ['2.1.113', '2.1.153', '2.1.185', '2.1.191', '2.1.243', 'latest'],
     platform: 'linux-x64',
     nodes: null,
     force: false,

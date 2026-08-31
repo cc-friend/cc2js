@@ -8,7 +8,7 @@
 
 This CLI tool can convert Bun-compiled binaries of any Claude Code version into a pure JavaScript (Node.js) build that runs on plain **Node 18+**. No Bun runtime required. Built on [unbun](https://github.com/cc-friend/unbun).
 
-Anthropic's Claude Code 2.1.112+ ships as a [Bun](https://bun.sh) `--compile` binary. cc2js downloads it, parses the embedded module graph with unbun, de-buns the entry bundle so it runs under Node, transpiles it to a single Node-compatible `cli.js` (Node 18 minimum), and bundles ripgrep plus the runtime deps Bun provided natively.
+Anthropic's Claude Code 2.1.112+ ships as a [Bun](https://bun.sh) [`--compile`](https://bun.com/docs/bundler/executables)'d binary. cc2js downloads it, parses the embedded module graph with unbun, makes the entry runnable under Node — de-bunning the single CommonJS bundle older releases carry, or re-bundling the ~1800 ESM chunks the newer code-split ones are cut into — transpiles it to a single Node-compatible `cli.js` (Node 18 minimum), and bundles ripgrep plus the runtime deps Bun provided natively.
 
 ## Quick start
 
@@ -106,7 +106,7 @@ Management:
   (all accept --bin-dir <dir>)
 ```
 
-With `-o <dir>` (or `--no-link`) cc2js converts into a folder containing `cli.js`, `bun-shim.cjs`, the `*.node` addons, `rg` (`rg.exe` on Windows), a `package.json`, and a `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` runs on the transpile target and newer (default: the Node you ran cc2js with; use `-t node18` for the most portable build). Config is read from `~/.claude`, like the official build.
+With `-o <dir>` (or `--no-link`) cc2js converts into a folder containing `cli.js`, `bun-shim.cjs`, the `*.node` addons, the embedded assets the bundle reads at runtime (skill and doc text), `rg` (`rg.exe` on Windows), a `package.json`, and a `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` runs on the transpile target and newer (default: the Node you ran cc2js with; use `-t node18` for the most portable build). Config is read from `~/.claude`, like the official build.
 
 By default (no `-o`) the build instead goes to `~/.cc2js/versions/` and a launcher (default `cc2`) lands in `~/.local/bin` (on Windows: `cc2.cmd` + `cc2.ps1` + a Git Bash `cc2` in `%USERPROFILE%\.cc2js\bin`). If that dir isn't already on your PATH, cc2js adds it for you — the Windows user PATH (via the environment API, not `setx`), or your bash/zsh rc — then you open a new terminal to pick it up (an already-open shell can't be changed by any process). It never adds a duplicate and leaves an already-working PATH untouched; `--no-add-path` opts out (prints the line instead), and fish/tcsh always get a correct manual line.
 
@@ -115,10 +115,11 @@ Each install/update reports its outcome: `linked` (first time), `updated` (`old 
 ## How it works
 
 1. Download the Bun binary from downloads.claude.ai (SHA-256 checked; GitHub and npm fallbacks).
-2. Parse the embedded module graph with [unbun](https://github.com/cc-friend/unbun) and take the entry module plus native addons.
-3. De-bun `cli.js`: drop the `// @bun` directive, invoke the CommonJS wrapper Bun normally calls itself, and prepend `bun-shim.cjs` (a Node reimplementation of the `Bun.*` APIs).
-4. Transpile to Node 18 with esbuild (lowering `using`) and prepend small runtime polyfills, producing one `cli.js` that runs on Node 18 through 26+.
-5. Add ripgrep and `npm install` the runtime deps.
+2. Parse the embedded module graph with [unbun](https://github.com/cc-friend/unbun) and take the entry module, the native addons and the embedded assets.
+3. Make the entry runnable under Node, whichever shape it ships in. Up to ~2.1.235 it is one self-contained CommonJS bundle: drop the `// @bun` directive and invoke the wrapper Bun normally calls itself. From ~2.1.243 it is a code-split ESM graph — a ~20 KB entry importing ~1800 `chunk-*.js` siblings — so esbuild re-bundles the graph back into one CommonJS file, resolving Bun's `import.meta` onto its Node equivalents.
+4. Prepend `bun-shim.cjs` (a Node reimplementation of the `Bun.*` APIs) and small runtime polyfills, lowering `using` and friends to the target with esbuild, producing one `cli.js` that runs on Node 18 through 26+.
+5. Write the embedded files next to it — native addons, and the skill/doc assets the bundle reads back through Bun's virtual fs (`.zst` ones inflated up front when the converting Node has zstd).
+6. Add ripgrep and `npm install` the runtime deps.
 
 ## Library API
 

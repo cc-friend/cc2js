@@ -11,29 +11,57 @@ const fs = require('fs');
 const cp = require('child_process');
 const util = require('util');
 const net = require('net');
+const zlib = require('zlib');
 const { Readable, Writable } = require('stream');
 const Module = require('module');
 
 // ---- redirect Bun's in-binary virtual fs to local files next to cli.js ----
 // Bun uses /$bunfs/root/X on POSIX and B:\~BUN\root\X (or B:/~BUN/root/X) on
-// Windows. Map any of these prefixes onto __dirname (where convert.ts wrote the
-// extracted .node/.wasm addons and other embedded files).
+// Windows. Map any of these prefixes onto the dir cc2js extracted the embedded
+// files into — cli.js's own dir. cc2js declares __cc2js_root above this shim so
+// the nested worker bundles point at the same place; when this file is required
+// directly (the reference copy next to cli.js) it falls back to its own dir.
+const BUNFS_ROOT = typeof __cc2js_root === 'string' ? __cc2js_root : __dirname;
 const BUNFS_PREFIXES = ['/$bunfs/root/', 'B:\\~BUN\\root\\', 'B:/~BUN/root/'];
+function bunfsPath(request) {
+  for (const pre of BUNFS_PREFIXES) {
+    if (request.startsWith(pre)) return path.join(BUNFS_ROOT, request.slice(pre.length).replace(/\\/g, '/'));
+  }
+  return null;
+}
+
 const _resolveFilename = Module._resolveFilename;
 Module._resolveFilename = function (request, parent, isMain, options) {
-  if (typeof request === 'string') {
-    for (const pre of BUNFS_PREFIXES) {
-      if (request.startsWith(pre)) {
-        return path.join(__dirname, request.slice(pre.length).replace(/\\/g, '/'));
-      }
-    }
-  }
-  return _resolveFilename.call(this, request, parent, isMain, options);
+  const mapped = typeof request === 'string' ? bunfsPath(request) : null;
+  return mapped || _resolveFilename.call(this, request, parent, isMain, options);
 };
+
+// Bun also served the embedded files through fs: since 2.1.24x the bundle
+// readFileSync()s its skill/doc assets by absolute /$bunfs/root/… path. Redirect
+// those reads to the extracted copies; every other path passes through.
+function redirectFs(obj, names) {
+  for (const name of names) {
+    const orig = obj[name];
+    if (typeof orig !== 'function') continue;
+    obj[name] = function (p, ...rest) {
+      return orig.call(this, (typeof p === 'string' && bunfsPath(p)) || p, ...rest);
+    };
+  }
+}
+redirectFs(fs, ['readFileSync', 'readFile', 'existsSync', 'statSync', 'openSync', 'accessSync', 'createReadStream']);
+redirectFs(fs.promises, ['readFile', 'stat', 'access', 'open']);
+
+// Bun's require() of an embedded .md/.txt asset hands back its text (the `text`
+// loader). Node has no loader for those extensions and would parse them as JS.
+for (const ext of ['.md', '.txt']) {
+  Module._extensions[ext] = (mod, filename) => {
+    mod.exports = fs.readFileSync(filename, 'utf8');
+  };
+}
 
 // make sibling executables (the bundled ripgrep) discoverable on PATH so the
 // bundle's system-rg fallback resolves `rg` out of the box.
-process.env.PATH = __dirname + path.delimiter + (process.env.PATH || '');
+process.env.PATH = BUNFS_ROOT + path.delimiter + (process.env.PATH || '');
 
 // Bun-only modules the bundle require()s (Bun provided them natively; not bundled).
 // `bun:ffi` is used to dlopen the system keychain lib — stub it so the bundle's
@@ -344,6 +372,18 @@ const JSONL = {
 // Bundle has a try/catch fallback ("unavailable (running under Node?)").
 class Terminal { constructor() { throw new Error('Bun.Terminal unavailable under Node'); } }
 
+// ---------------------------- zstd ------------------------------------------
+// The bundle inflates its embedded .zst assets with these. cc2js inflates them at
+// conversion time whenever the converting Node has zstd (Node 22.15+/23.8+), and
+// the bundle sniffs the zstd magic before calling in — so this only runs for a
+// build converted on an older Node, where zlib may have no zstd to offer.
+function zstdSync(buf) {
+  if (typeof zlib.zstdDecompressSync !== 'function') {
+    throw new Error('zstd needs Node 22.15+/23.8+; re-run cc2js on such a Node to inflate the assets up front');
+  }
+  return zlib.zstdDecompressSync(buf);
+}
+
 // ---------------------------- assemble Bun ----------------------------------
 const Bun = {
   version: '1.4.0',
@@ -361,6 +401,8 @@ const Bun = {
   JSONL,
   Terminal,
   embeddedFiles: [],
+  zstdDecompressSync: zstdSync,
+  zstdDecompress: async (buf) => zstdSync(buf),
   deepEquals: (a, b) => util.isDeepStrictEqual(a, b),
   gc: () => { try { global.gc && global.gc(); } catch {} },
   generateHeapSnapshot: () => { try { return require('v8').getHeapStatistics(); } catch { return {}; } },

@@ -67,7 +67,7 @@
   },
   "dependencies": {
     "esbuild-wasm": "^0.28.1",
-    "unbunjs": "^1.0.0"
+    "unbunjs": "^2.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",

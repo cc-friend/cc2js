@@ -8,7 +8,7 @@
 
 Cet outil CLI peut convertir des binaires compilés avec Bun de n'importe quelle version de Claude Code en un build JavaScript pur (Node.js) qui s'exécute sur un simple **Node 18+**. Aucun runtime Bun requis. Basé sur [unbun](https://github.com/cc-friend/unbun).
 
-Claude Code 2.1.112+ d'Anthropic est distribué sous forme de binaire [Bun](https://bun.sh) `--compile`. cc2js le télécharge, analyse le graphe de modules embarqué avec unbun, « de-bun » le bundle d'entrée pour qu'il s'exécute sous Node, le transpile en un unique `cli.js` compatible Node (Node 18 minimum), et embarque ripgrep ainsi que les dépendances d'exécution que Bun fournissait nativement.
+Claude Code 2.1.112+ d'Anthropic est distribué sous forme de binaire compilé avec [Bun](https://bun.com) ([`--compile`](https://bun.com/docs/bundler/executables)). cc2js le télécharge, analyse le graphe de modules embarqué avec unbun, rend l'entrée exécutable sous Node — en « de-bunnant » l'unique bundle CommonJS des versions plus anciennes, ou en re-bundlant les ~1800 chunks ESM des versions récentes découpées en code-splitting —, le transpile en un unique `cli.js` compatible Node (Node 18 minimum), et embarque ripgrep ainsi que les dépendances d'exécution que Bun fournissait nativement.
 
 ## Démarrage rapide
 
@@ -106,7 +106,7 @@ Gestion :
   (tous acceptent --bin-dir <dir>)
 ```
 
-Avec `-o <dir>` (ou `--no-link`), cc2js convertit dans un dossier contenant `cli.js`, `bun-shim.cjs`, les addons `*.node`, `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2js ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
+Avec `-o <dir>` (ou `--no-link`), cc2js convertit dans un dossier contenant `cli.js`, `bun-shim.cjs`, les addons `*.node`, les ressources embarquées que le bundle lit à l'exécution (textes des skills et de la doc), `rg` (`rg.exe` sous Windows), un `package.json` et un `node_modules` (ws, undici, ajv, ajv-formats). `cli.js` s'exécute sur la cible de transpilation et plus récent (par défaut : le Node avec lequel vous avez lancé cc2js ; utilisez `-t node18` pour le build le plus portable). La configuration est lue depuis `~/.claude`, comme le build officiel.
 
 Par défaut (sans `-o`), le build va dans `~/.cc2js/versions/` et un lanceur (par défaut `cc2`) est placé dans `~/.local/bin` (sous Windows : `cc2.cmd` + `cc2.ps1` + un `cc2` pour Git Bash, dans `%USERPROFILE%\.cc2js\bin`). Si ce dossier n'est pas déjà sur votre PATH, cc2js l'y ajoute pour vous — le PATH utilisateur Windows (via l'API d'environnement, pas `setx`), ou votre rc bash/zsh — puis vous ouvrez un nouveau terminal pour qu'il soit pris en compte (aucun processus ne peut modifier un shell déjà ouvert). Il n'ajoute jamais de doublon et laisse intact un PATH déjà fonctionnel ; `--no-add-path` le désactive (affiche la ligne à la place), et fish/tcsh reçoivent toujours une commande manuelle correcte.
 
@@ -115,10 +115,11 @@ Chaque installation/mise à jour indique son résultat : `linked` (première ins
 ## Fonctionnement
 
 1. Télécharger le binaire Bun depuis downloads.claude.ai (SHA-256 vérifié ; replis sur GitHub et npm).
-2. Analyser le graphe de modules embarqué avec [unbun](https://github.com/cc-friend/unbun) et récupérer le module d'entrée ainsi que les addons natifs.
-3. « De-bun » `cli.js` : retirer la directive `// @bun`, invoquer le wrapper CommonJS que Bun appelle normalement lui-même, et préfixer `bun-shim.cjs` (une réimplémentation Node des API `Bun.*`).
-4. Transpiler vers Node 18 avec esbuild (abaissement de `using`) et préfixer de petits polyfills d'exécution, produisant un unique `cli.js` qui s'exécute de Node 18 à 26+.
-5. Ajouter ripgrep et faire un `npm install` des dépendances d'exécution.
+2. Analyser le graphe de modules embarqué avec [unbun](https://github.com/cc-friend/unbun) et récupérer le module d'entrée, les addons natifs et les ressources embarquées.
+3. Rendre l'entrée exécutable sous Node, quelle que soit sa forme. Jusqu'à ~2.1.235, c'est un bundle CommonJS autonome : retirer la directive `// @bun` et invoquer le wrapper que Bun appelle normalement lui-même. À partir de ~2.1.243, c'est un graphe ESM découpé — une entrée de ~20 Ko qui importe ~1800 modules frères `chunk-*.js` — qu'esbuild re-bundle en un unique fichier CommonJS, en traduisant l'`import.meta` de Bun vers ses équivalents Node.
+4. Préfixer `bun-shim.cjs` (une réimplémentation Node des API `Bun.*`) et de petits polyfills d'exécution, en abaissant `using` et consorts vers la cible avec esbuild, produisant un unique `cli.js` qui s'exécute de Node 18 à 26+.
+5. Écrire les fichiers embarqués à côté : les addons natifs, et les ressources skills/doc que le bundle relit via le système de fichiers virtuel de Bun (les `.zst` sont décompressés en amont si le Node de conversion sait faire du zstd).
+6. Ajouter ripgrep et faire un `npm install` des dépendances d'exécution.
 
 ## API de bibliothèque
 

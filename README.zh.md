@@ -8,7 +8,7 @@
 
 这个 CLI 工具可以把任意 Claude Code 版本的 Bun 编译二进制转换为纯 JavaScript（Node.js）构建，可在普通 **Node 18+** 上运行。无需 Bun 运行时。基于 [unbun](https://github.com/cc-friend/unbun)。
 
-Anthropic 的 Claude Code 2.1.112+ 以 [Bun](https://bun.sh) `--compile` 二进制形式发布。cc2js 会下载它，用 unbun 解析内嵌的模块图，把入口 bundle 去 Bun 化（de-bun）使其能在 Node 下运行，转译为单个 Node 兼容的 `cli.js`（最低 Node 18），并打包 ripgrep 以及 Bun 原生提供的那些运行时依赖。
+Anthropic 的 Claude Code 2.1.112+ 以 [Bun](https://bun.sh)（[`--compile`](https://bun.com/docs/bundler/executables)）编译的二进制形式发布。cc2js 会下载它，用 unbun 解析内嵌的模块图，让入口能在 Node 下运行——旧版本带的是单个 CommonJS bundle，做去 Bun 化（de-bun）即可；新版本被代码分割成约 1800 个 ESM chunk，则重新打包回单文件——再转译为单个 Node 兼容的 `cli.js`（最低 Node 18），并打包 ripgrep 以及 Bun 原生提供的那些运行时依赖。
 
 ## 快速开始
 
@@ -106,7 +106,7 @@ cc2js ls | rm <version> | delink [name] | clean   管理已安装的版本与链
   （均接受 --bin-dir <dir>）
 ```
 
-用 `-o <dir>`（或 `--no-link`）时，cc2js 转换到一个文件夹，内含 `cli.js`、`bun-shim.cjs`、`*.node` 原生插件、`rg`（Windows 上为 `rg.exe`）、一个 `package.json`，以及一个 `node_modules`（ws、undici、ajv、ajv-formats）。`cli.js` 运行于转译目标及更新的 Node（默认：你跑 cc2js 的那个 Node；要最可移植就用 `-t node18`）。配置从 `~/.claude` 读取，与官方构建一致。
+用 `-o <dir>`（或 `--no-link`）时，cc2js 转换到一个文件夹，内含 `cli.js`、`bun-shim.cjs`、`*.node` 原生插件、bundle 运行时要读取的内嵌资源（技能与文档文本）、`rg`（Windows 上为 `rg.exe`）、一个 `package.json`，以及一个 `node_modules`（ws、undici、ajv、ajv-formats）。`cli.js` 运行于转译目标及更新的 Node（默认：你跑 cc2js 的那个 Node；要最可移植就用 `-t node18`）。配置从 `~/.claude` 读取，与官方构建一致。
 
 默认（不带 `-o`）时，产物放到 `~/.cc2js/versions/`，并放一个 launcher（默认 `cc2`）到 `~/.local/bin`（Windows 上是 `cc2.cmd` + `cc2.ps1` + 一个 Git Bash 用的 `cc2`，位于 `%USERPROFILE%\.cc2js\bin`）。若该目录还不在 PATH 上，cc2js 会替你加进去 —— Windows 写用户级 PATH（走环境变量 API，不是 `setx`），bash/zsh 写对应 rc —— 然后你开一个新终端即可生效（已经开着的终端任何进程都改不了）。它不会重复添加，也不动本来就能用的 PATH；`--no-add-path` 可关掉（改为只打印那一行），fish/tcsh 则始终给你一条正确语法的手动命令。
 
@@ -115,10 +115,11 @@ cc2js ls | rm <version> | delink [name] | clean   管理已安装的版本与链
 ## 工作原理
 
 1. 从 downloads.claude.ai 下载 Bun 二进制（校验 SHA-256；并有 GitHub 与 npm 兜底）。
-2. 用 [unbun](https://github.com/cc-friend/unbun) 解析内嵌的模块图，取出入口模块与原生插件。
-3. 对 `cli.js` 去 Bun 化：去掉 `// @bun` 指令，调用 Bun 平时自己调用的那个 CommonJS 包装函数，并在前面拼上 `bun-shim.cjs`（用 Node 重新实现的 `Bun.*` API）。
-4. 用 esbuild 转译到 Node 18（降级 `using`），并在前面加上少量运行时 polyfill，产出一个能在 Node 18 到 26+ 上运行的 `cli.js`。
-5. 加入 ripgrep，并 `npm install` 运行时依赖。
+2. 用 [unbun](https://github.com/cc-friend/unbun) 解析内嵌的模块图，取出入口模块、原生插件与内嵌资源。
+3. 让入口能在 Node 下运行，两种形态都支持。到 ~2.1.235 为止，入口是一个自包含的 CommonJS bundle：去掉 `// @bun` 指令，调用 Bun 平时自己调用的那个包装函数即可。从 ~2.1.243 起，入口变成代码分割的 ESM 模块图——约 20 KB 的入口 import 约 1800 个 `chunk-*.js` 兄弟模块——于是用 esbuild 把整个图重新打包回单个 CommonJS 文件，并把 Bun 的 `import.meta` 映射到 Node 的对应物。
+4. 在前面拼上 `bun-shim.cjs`（用 Node 重新实现的 `Bun.*` API）与少量运行时 polyfill，同时用 esbuild 按目标降级 `using` 之类的语法，产出一个能在 Node 18 到 26+ 上运行的 `cli.js`。
+5. 把内嵌文件写到它旁边——原生插件，以及 bundle 会通过 Bun 虚拟文件系统读回的技能／文档资源（转换时所用的 Node 若支持 zstd，`.zst` 会预先解压）。
+6. 加入 ripgrep，并 `npm install` 运行时依赖。
 
 ## 库 API
 

@@ -16,12 +16,13 @@ jobs:
       id-token: write # OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+      # Trusted publishing needs npm >= 11.5.1, which Node 24 already ships
+      # (24.20 carries npm 11.19). Installing npm@latest on top instead only
+      # breaks once npm raises its own engine floor past the Node used here.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
-      # Trusted publishing needs npm >= 11.5.1 (newer than the bundled npm).
-      - run: npm install -g npm@latest
       - run: npm ci
       - name: Verify tag matches package.json version
         run: |

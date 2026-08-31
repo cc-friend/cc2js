@@ -2,6 +2,7 @@
 // executes them all when this file is run via `tsx test/index.test.ts`.
 import './addpath.test';
 import './api.test';
+import './bundle.test';
 import './cli.test';
 import './convert.test';
 import './debun.test';

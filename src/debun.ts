@@ -5,6 +5,17 @@
  */
 const WRAP_ARGS = '(module.exports, require, module, __filename, __dirname)';
 
+/*
+ * Wrap a CJS bundle in the module wrapper Bun would have called, and call it.
+ * The wrapper is what keeps the bundle's top-level names (`fs`, `path`, … after
+ * minification) out of the shim's scope, so it is needed for the re-bundled ESM
+ * graph just as much as for a bundle lifted straight out of the binary.
+ */
+export function invokeCjs(bundle: string): string {
+  if (/^\(\s*(?:async\s+)?function\b/.test(bundle)) return bundle + WRAP_ARGS + ';\n';
+  return '(function(exports, require, module, __filename, __dirname) {\n' + bundle + '\n})' + WRAP_ARGS + ';\n';
+}
+
 export function debun(rawBundle: string | Buffer, shimSource: string, version: string): string {
   let bundle = Buffer.isBuffer(rawBundle) ? rawBundle.toString('utf8') : String(rawBundle);
 
@@ -13,12 +24,7 @@ export function debun(rawBundle: string | Buffer, shimSource: string, version: s
   bundle = bundle.replace(/^#![^\n]*\r?\n/, ''); // stray shebang
   bundle = bundle.replace(/\s+$/, ''); // trailing ws — expression ends with "})"
 
-  let invoked: string;
-  if (/^\(\s*function\b/.test(bundle) || /^\(\s*async\s+function\b/.test(bundle)) {
-    invoked = bundle + WRAP_ARGS + ';\n';
-  } else {
-    invoked = '(function(exports, require, module, __filename, __dirname) {\n' + bundle + '\n})' + WRAP_ARGS + ';\n';
-  }
+  const invoked = invokeCjs(bundle);
 
   const banner =
     '#!/usr/bin/env node\n' +

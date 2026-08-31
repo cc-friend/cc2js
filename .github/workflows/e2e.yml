@@ -7,7 +7,7 @@ on:
     inputs:
       versions:
         type: string
-        default: '2.1.113,2.1.153,latest'
+        default: '2.1.113,2.1.185,2.1.243,latest'
       platform:
         type: string
         default: linux-x64

@@ -1,15 +1,22 @@
 /*
  * convert: the full pipeline.
  *   obtain binary → parse module graph (unbunjs) → de-bun cli.js → transpile to a
- *   single Node-18 cli.js → write native addons → package.json + npm install →
+ *   single Node-18 cli.js → write the embedded files → package.json + npm install →
  *   fetch ripgrep → write README.
+ *
+ * Two bundle shapes ship in the wild and both are handled: one self-contained CJS
+ * bundle (up to ~2.1.235) goes through debun() + transpile(); a code-split ESM
+ * module graph (~2.1.243 onwards) is re-bundled to the same single-file result by
+ * bundle.ts. Everything downstream of step 4 is identical either way.
  */
 import cp from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type BunModule, getModuleContents, getModuleSource, parseBuffer } from 'unbunjs';
+import zlib from 'node:zlib';
+import { type BunModule, getModuleContents, getModuleSource, type ParsedBunBinary, parseBuffer } from 'unbunjs';
 
+import { type BundledFile, bundleGraph, bunfsRelative, collectGraph, isEsmGraph } from './bundle';
 import { debun } from './debun';
 import { hostPlatform, obtainBinary } from './download';
 import defaultLog, { type Logger } from './log';
@@ -55,6 +62,44 @@ function fmtBytes(n: number): string {
 function basename(name: string): string {
   // strip up to the last / or \ (win32 Bun binaries use backslash module paths)
   return name.replace(/^.*[\\/]/, '');
+}
+
+// zstd magic. The bundle sniffs it before reaching for Bun.zstdDecompressSync(),
+// so an already-inflated asset is simply used as-is.
+const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
+const zstdDecompressSync = (zlib as { zstdDecompressSync?: (b: Buffer) => Buffer }).zstdDecompressSync;
+
+/*
+ * Write one embedded file next to cli.js, under the path the bundle asks for.
+ *
+ * Text modules are stored as encoded JS strings that Bun decoded on read, so they
+ * go back out as UTF-8 (unbun's getModuleSource honours the encoding Bun tagged
+ * them with — latin1 or UTF-16LE); `binary` ones are byte-exact. Bun served the `.zst` assets
+ * compressed and the bundle inflates them with Bun.zstdDecompress — Node only grew
+ * zstd in 22.15/23.8, so inflate here whenever the converting Node can, and ship
+ * the rest compressed for the shim to handle at runtime.
+ */
+function writeEmbedded(outDir: string, parsed: ParsedBunBinary, mod: BunModule): number {
+  const root = path.resolve(outDir); // `out` may be relative when convert() is called as a library
+  const dest = path.resolve(root, ...bunfsRelative(mod.name).split('/'));
+  if (!dest.startsWith(root + path.sep)) throw new Error('embedded file escapes the output dir: ' + mod.name);
+  let content: Buffer | string;
+  if (mod.encoding === 'binary') {
+    const raw = getModuleContents(parsed, mod);
+    content = raw;
+    if (zstdDecompressSync && ZSTD_MAGIC.every((b, i) => raw[i] === b)) {
+      try {
+        content = zstdDecompressSync(raw);
+      } catch {
+        /* leave it compressed — the shim inflates it at runtime */
+      }
+    }
+  } else {
+    content = getModuleSource(parsed, mod);
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, content);
+  return Buffer.byteLength(content);
 }
 
 // entry = the module Bun marked as entry; fall back to a cli.js by name, then largest js.
@@ -117,23 +162,43 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     log.step('De-bunning + transpiling cli.js (' + target + ')');
     const shimSource = fs.readFileSync(path.join(ASSETS, 'bun-shim.cjs'), 'utf8');
     const polyfills = fs.readFileSync(path.join(ASSETS, 'polyfills.cjs'), 'utf8');
-    const cli = await transpile(debun(entrySource, shimSource, version), polyfills, target);
-    const cliPath = path.join(outDir, 'cli.js');
-    fs.writeFileSync(cliPath, cli);
-    fs.chmodSync(cliPath, 0o755);
-    fs.copyFileSync(path.join(ASSETS, 'bun-shim.cjs'), path.join(outDir, 'bun-shim.cjs'));
-    log.ok('cli.js (' + fmtBytes(Buffer.byteLength(cli)) + ')  [target ' + target + ']');
 
-    // 5) native addons (.node / .wasm) next to cli.js (basename; shim redirects /$bunfs/root/*)
-    const written: string[] = [];
-    for (const m of parsed.modules) {
-      if (/\.(node|wasm)$/.test(m.name)) {
-        const content = getModuleContents(parsed, m);
-        fs.writeFileSync(path.join(outDir, basename(m.name)), content);
-        written.push(basename(m.name) + ' (' + fmtBytes(content.length) + ')');
-      }
+    const graph = isEsmGraph(entry, entrySource) ? collectGraph(parsed, entry) : null;
+    let builds: BundledFile[];
+    if (graph) {
+      log.info('code-split ESM entry — re-bundling ' + graph.files.size + ' modules');
+      builds = await bundleGraph(graph, { shim: shimSource, polyfills, version, target });
+    } else {
+      builds = [{ name: 'cli.js', code: await transpile(debun(entrySource, shimSource, version), polyfills, target) }];
     }
-    if (written.length) log.ok('native addons: ' + written.join(', '));
+    for (const b of builds) {
+      const p = path.join(outDir, b.name);
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, b.code);
+      fs.chmodSync(p, 0o755);
+      log.ok(b.name + ' (' + fmtBytes(Buffer.byteLength(b.code)) + ')  [target ' + target + ']');
+    }
+    fs.copyFileSync(path.join(ASSETS, 'bun-shim.cjs'), path.join(outDir, 'bun-shim.cjs'));
+
+    // 5) every embedded file that did NOT get compiled into the builds above —
+    // native addons, text/binary assets, and (single-bundle shape) the sibling
+    // CJS modules. They keep their path under /$bunfs/root/, which the shim
+    // redirects to this dir at runtime.
+    const compiled = new Set(graph ? graph.files.keys() : [entry.name]);
+    const addons: string[] = [];
+    let assets = 0;
+    let assetBytes = 0;
+    for (const m of parsed.modules) {
+      if (compiled.has(m.name)) continue;
+      const size = writeEmbedded(outDir, parsed, m);
+      assets++;
+      assetBytes += size;
+      if (/\.(node|wasm)$/.test(m.name)) addons.push(basename(m.name) + ' (' + fmtBytes(size) + ')');
+    }
+    if (addons.length) log.ok('native addons: ' + addons.join(', '));
+    if (assets > addons.length) {
+      log.ok('embedded files: ' + assets + ' (' + fmtBytes(assetBytes) + ')');
+    }
 
     // 6) output package.json + runtime deps
     const outPkg = {
@@ -196,6 +261,8 @@ function writeOutputReadme(outDir: string, version: string, platform: string): v
     '- `cli.js` — de-bunned + transpiled bundle (Bun shim + runtime polyfills inlined); Node 18+',
     '- `bun-shim.cjs` — Bun→Node compatibility layer (reference copy; already inlined into cli.js)',
     '- `*.node` — native addons extracted from the Bun binary',
+    '- `*.md`, `*.txt`, `*.zst`, … — assets the bundle reads back by `/$bunfs/root/…` path',
+    '- `src/…` — modules the bundle loads by path at runtime (e.g. the function-hooks worker)',
     '- `rg` — ripgrep (Grep/Glob); the shim puts this dir on PATH',
     '- `node_modules/` — ws, undici, ajv, ajv-formats (Bun provided these natively)',
     ''
