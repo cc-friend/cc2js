@@ -388,6 +388,9 @@ function zstdSync(buf) {
 const Bun = {
   version: '1.4.0',
   revision: '0000000000000000000000000000000000000000',
+  // Claude Code 2.1.270 probes Bun.unsafe.setJITPolicy?.(1) during startup.
+  // Expose the namespace but leave engine-specific hooks absent under Node.
+  unsafe: {},
   stringWidth,
   wrapAnsi,
   stripANSI,
