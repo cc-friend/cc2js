@@ -1,6 +1,6 @@
 {
   "name": "cc2js",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CLI that converts Bun-compiled binaries of any Claude Code version into a pure JavaScript build that runs on plain Node 18+",
   "keywords": [
     "claude-code",
