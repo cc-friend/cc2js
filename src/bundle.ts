@@ -41,15 +41,36 @@ const SPECIFIER_OF = /(?:\bfrom|\bimport|\brequire)\s*\(?\s*$/;
 // actually reads onto the CJS equivalents. Bun's `import.meta.require` is plain
 // require(); `dirname` is the virtual root every embedded module sees, which is
 // the output dir — not `__dirname`, which differs in the nested worker bundles.
+// Bun's own `dir` is the same value (2.1.280's built-in plugins pass it to
+// path.join); anything left unmapped would be silently `undefined`, since
+// esbuild empties `import.meta` in CJS output.
 // The `__cc2js_*` bindings are declared in the preamble below.
 const IMPORT_META: Record<string, string> = {
   'import.meta.require': 'require',
   'import.meta.dirname': '__cc2js_root',
+  'import.meta.dir': '__cc2js_root',
   'import.meta.path': '__filename',
   'import.meta.filename': '__filename',
   'import.meta.url': '__cc2js_meta_url',
   'import.meta.main': '__cc2js_meta_main'
 };
+
+// Built-in plugins (2.1.273+) hand their hooks module to one helper, which asks
+// ku() — Bun.isStandaloneExecutable — whether to take the module compiled into
+// the bundle or a dev checkout's source folder:
+//   var Lq=(e,o,r)=>ku()?Tr(o,r(),e):{module:o,folder:e};
+// A cc2js build is the compiled bundle, yet ku() has to stay false: a dozen
+// places re-spawn process.execPath as the claude binary when it is true. So pin
+// only this choice to the compiled branch; left alone, each built-in plugin
+// looks for hooks/register.ts on disk and fails to load ("not readable (ENOENT)").
+const HOOKS_MODULE_PICK = /[\w$]+\(\)\?([\w$]+\(([\w$]+),[\w$]+\(\),([\w$]+)\)):\{module:\2,folder:\3\}/g;
+// The source-folder branch itself: still there after patching means a release
+// reshaped the helper and the pattern above needs updating.
+const HOOKS_MODULE_FOLDER = /\{module:[\w$]+,folder:[\w$]+\}/;
+
+function patchSource(source: string): string {
+  return source.includes(',folder:') ? source.replace(HOOKS_MODULE_PICK, '$1') : source;
+}
 
 export interface EsmGraph {
   /** bunfs name of the entry module */
@@ -65,6 +86,8 @@ export interface BundleOptions {
   polyfills: string;
   version: string;
   target: string;
+  /** told when a source patch no longer matches this release */
+  warn?: (msg: string) => void;
 }
 
 export interface BundledFile {
@@ -122,6 +145,7 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
     { in: graph.entry, out: 'cli' },
     ...graph.extras.map((n) => ({ in: n, out: bunfsRelative(n).replace(/\.[cm]?js$/, '') }))
   ];
+  const unpatched: string[] = [];
   const result = await esbuild.build({
     entryPoints,
     bundle: true,
@@ -133,8 +157,15 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
     legalComments: 'inline',
     logLevel: 'silent',
     define: IMPORT_META,
-    plugins: [graphPlugin(graph.files)]
+    plugins: [graphPlugin(graph.files, unpatched)]
   });
+  if (unpatched.length) {
+    opts.warn?.(
+      'built-in plugin hooks helper not recognised in ' +
+        unpatched.join(', ') +
+        ' — built-in plugins may fail to load ("not readable (ENOENT)")'
+    );
+  }
 
   const named = new Map(entryPoints.map((e) => [OUTDIR + '/' + e.out + '.js', e.out + '.js']));
   const header = noticeOf(graph.files.get(graph.entry) ?? '');
@@ -149,7 +180,7 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
   );
 }
 
-function graphPlugin(files: Map<string, string>): Plugin {
+function graphPlugin(files: Map<string, string>, unpatched: string[]): Plugin {
   return {
     name: NS,
     setup(build) {
@@ -160,7 +191,11 @@ function graphPlugin(files: Map<string, string>): Plugin {
       build.onResolve({ filter: /.*/ }, (args) =>
         files.has(args.path) ? { path: args.path, namespace: NS } : { path: args.path, external: true }
       );
-      build.onLoad({ filter: /.*/, namespace: NS }, (args) => ({ contents: files.get(args.path), loader: 'js' }));
+      build.onLoad({ filter: /.*/, namespace: NS }, (args) => {
+        const contents = patchSource(files.get(args.path) ?? '');
+        if (HOOKS_MODULE_FOLDER.test(contents)) unpatched.push(bunfsRelative(args.path));
+        return { contents, loader: 'js' };
+      });
     }
   };
 }

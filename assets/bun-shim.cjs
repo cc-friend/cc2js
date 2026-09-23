@@ -151,6 +151,124 @@ function wrapAnsi(s, cols, opts = {}) {
   return out.join('\n');
 }
 
+// Styled text as ink sees it (Bun.sliceAnsi, Bun.ant.CellSegmenter): SGR codes,
+// OSC 8 links and grapheme clusters. Every other escape (cursor moves, titles, …)
+// is dropped, and the active style is tracked the way the ansi-tokenize code ink
+// used up to 2.1.270 did, each code paired with the code that ends it.
+const SGR_RESET = '\x1b[0m';
+const LINK_CLOSE = '\x1b]8;;\x07';
+const SGR_CLOSE = new Map([[1, 22], [2, 22], [3, 23], [4, 24], [53, 55], [7, 27], [8, 28], [9, 29]]);
+for (let c = 30; c <= 37; c++) { SGR_CLOSE.set(c, 39); SGR_CLOSE.set(c + 60, 39); SGR_CLOSE.set(c + 10, 49); SGR_CLOSE.set(c + 70, 49); }
+const SGR_ENDS = new Set([0, 22, 23, 24, 55, 27, 28, 29, 39, 49, 59]);
+// one SGR sequence's parameters → its codes, keeping 38/48/58 colour arguments together
+function sgrCodes(params) {
+  const p = params.split(';'), out = [];
+  for (let i = 0; i < p.length; i++) {
+    const n = +p[i] || 0, arity = p[i + 1] === '5' ? 3 : p[i + 1] === '2' ? 5 : 0;
+    if ((n === 38 || n === 48 || n === 58) && arity && i + arity <= p.length) {
+      out.push({ code: '\x1b[' + p.slice(i, i + arity).join(';') + 'm', endCode: '\x1b[' + (n + 1) + 'm' });
+      i += arity - 1;
+      continue;
+    }
+    const code = '\x1b[' + n + 'm';
+    out.push({ code, endCode: SGR_ENDS.has(n) ? code : '\x1b[' + (SGR_CLOSE.get(n) || 0) + 'm' });
+  }
+  return out;
+}
+function applyCode(active, c) {
+  if (c.code === SGR_RESET) return active.filter((a) => a.endCode === LINK_CLOSE); // SGR 0 leaves links alone
+  if (c.code === c.endCode) return active.filter((a) => a.endCode !== c.code);    // a closing code
+  if (c.code === '\x1b[1m' || c.code === '\x1b[2m') return active.some((a) => a.code === c.code) ? active : [...active, c];
+  return [...active.filter((a) => a.endCode !== c.endCode), c];
+}
+// Walk `s`, handing each SGR/OSC 8 sequence's codes to onCodes and the text
+// between escapes to onText.
+function scanAnsi(s, onCodes, onText) {
+  const n = s.length;
+  let i = 0, text = 0;
+  while (i < n) {
+    const c = s.charCodeAt(i);
+    if (c !== 0x1b && c !== 0x9b) { i++; continue; }
+    if (i > text) onText(s.slice(text, i));
+    i = text = skipEscape(s, i, onCodes);
+  }
+  if (n > text) onText(s.slice(text));
+}
+function skipEscape(s, i, onCodes) {
+  const n = s.length, csi = s.charCodeAt(i) === 0x9b, intro = csi ? 0x5b : s.charCodeAt(i + 1), start = csi ? i + 1 : i + 2;
+  if (intro === 0x5b) {                                            // CSI: params, intermediates, final byte
+    let j = start;
+    while (j < n && s.charCodeAt(j) >= 0x20 && s.charCodeAt(j) <= 0x3f) j++;
+    if (j >= n || s.charCodeAt(j) < 0x40 || s.charCodeAt(j) > 0x7e) return start; // malformed: drop the introducer
+    if (s[j] === 'm' && /^[0-9;]*$/.test(s.slice(start, j))) onCodes(sgrCodes(s.slice(start, j)));
+    return j + 1;
+  }
+  if (intro === 0x5d || intro === 0x50 || intro === 0x58 || intro === 0x5e || intro === 0x5f) { // OSC/DCS/SOS/PM/APC
+    for (let j = start; j < n; j++) {
+      const d = s.charCodeAt(j), st = d === 0x1b && s.charCodeAt(j + 1) === 0x5c;
+      if (d !== 0x07 && d !== 0x9c && !st) continue;
+      const body = s.slice(start, j), k = body.indexOf(';', 2);
+      if (intro === 0x5d && body.startsWith('8;')) {
+        const uri = k < 0 ? '' : body.slice(k + 1);
+        onCodes([{ code: uri ? '\x1b]8;;' + uri + '\x07' : LINK_CLOSE, endCode: LINK_CLOSE }]);
+      }
+      return st ? j + 2 : j + 1;
+    }
+    return n;                                                      // unterminated: swallows the rest
+  }
+  if (intro >= 0x28 && intro <= 0x2b) return Math.min(n, i + 3);  // charset designation
+  if (intro >= 0x30 && intro <= 0x7e) return i + 2;               // two-byte escape
+  return i + 1;                                                    // lone ESC
+}
+let graphemeSegmenter;
+function graphemes(text) {
+  if (/^[\x20-\x7e]*$/.test(text)) return text.split('');
+  if (graphemeSegmenter === undefined) {
+    graphemeSegmenter = typeof Intl === 'object' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+  }
+  if (graphemeSegmenter) return Array.from(graphemeSegmenter.segment(text), (g) => g.segment);
+  const out = [];                                                  // no ICU: glue zero-width code points on
+  for (const ch of text) {
+    if (out.length && cpWidth(ch.codePointAt(0)) === 0 && ch.codePointAt(0) >= 0x20) out[out.length - 1] += ch;
+    else out.push(ch);
+  }
+  return out;
+}
+// A cluster is as wide as stringWidth() says, so cells agree with ink's layout.
+function clusterWidth(g) {
+  let w = 0;
+  for (const ch of g) w += cpWidth(ch.codePointAt(0));
+  return w;
+}
+// Bun.sliceAnsi: the columns [start, end) of `s`, reopening the styles and link
+// in force at `start` and closing whatever is still open at the cut. A wide char
+// that would straddle `end` is left out.
+function sliceAnsi(s, start = 0, end) {
+  s = String(s);
+  let active = [], out = '', pos = 0, started = false, done = false;
+  scanAnsi(s, (codes) => {
+    if (done) return;
+    if (end !== undefined && pos >= end) { done = true; return; }
+    for (const c of codes) { active = applyCode(active, c); if (started) out += c.code; }
+  }, (text) => {
+    for (const g of graphemes(text)) {
+      if (done) return;
+      const w = clusterWidth(g);
+      if (end !== undefined && ((pos >= end && (w > 0 || !started)) || (w > 0 && pos + w > end))) { done = true; return; }
+      if (!started && pos >= start) {
+        if (start > 0 && w === 0) continue;
+        started = true;
+        out = active.map((a) => a.code).join('');
+      }
+      if (started) out += g;
+      pos += w;
+    }
+  });
+  if (!started) return '';
+  for (let i = active.length - 1; i >= 0; i--) out += active[i].endCode;
+  return out;
+}
+
 // ---------------------------- hash (64-bit) ---------------------------------
 // Bun.hash defaults to wyhash; we only need a deterministic 64-bit value
 // (used for in-process keys/dedup). FNV-1a 64 returning BigInt suffices.
@@ -384,6 +502,144 @@ function zstdSync(buf) {
   return zlib.zstdDecompressSync(buf);
 }
 
+// ---------------------------- Bun.ant.CellSegmenter -------------------------
+// From 2.1.273 ink lays each line of text into screen cells through this native
+// class of Anthropic's own Bun build, and throws without it. segment() turns a
+// line into cells — [grapheme index, run << 10 | TAB | width] — and runs —
+// [sgrKeys index, uris index] — interning into the four arrays ink reads by
+// index; paint() and setCell() write [char, word] cells into a screen row with
+// the wide-char bookkeeping ink's own JS did up to 2.1.270, and return
+// damageEnd * 2^36 + damageStart * 2^20 + the column after the last cell.
+// ink only asks for bidi reordering in Windows Terminal and VS Code; the cells
+// stay in logical order here.
+const CELL_TAB = 256;
+const CELL_RUN_SHIFT = 10;
+function intern(list, index, value) {
+  let i = index.get(value);
+  if (i === undefined) { i = list.length; list.push(value); index.set(value, i); }
+  return i;
+}
+class CellSegmenter {
+  constructor(opts = {}) {
+    this.substitute = opts.substitute || [];
+    this.screen = opts.screen;
+    this.graphemes = [];
+    this.sgrKeys = [''];
+    this.sgrCloseKeys = [''];
+    this.uris = [''];
+    this.index = { graphemes: new Map(), sgr: new Map([['', 0]]), uris: new Map([['', 0]]) };
+    this.cache = new Map();
+  }
+  segment(text, cells, runs /* , reordered */) {
+    let seg = this.cache.get(text);
+    if (seg === undefined) {
+      if (this.cache.size >= 4096) this.cache.clear();
+      seg = this.split(String(text));
+      this.cache.set(text, seg);
+    }
+    const count = seg.cells.length >> 1;
+    if (cells.length < seg.cells.length || runs.length < seg.runs.length) return -Math.max(count, seg.runs.length >> 1);
+    cells.set(seg.cells);
+    runs.set(seg.runs);
+    return count;
+  }
+  split(text) {
+    const cells = [], runs = [];
+    let active = [], uri = '', sgr = 0, link = 0, dirty = false, run = -1;
+    scanAnsi(text, (codes) => {
+      for (const c of codes) {
+        if (c.endCode === LINK_CLOSE) uri = c.code === LINK_CLOSE ? '' : c.code.slice(5, -1);
+        else active = applyCode(active, c);
+      }
+      dirty = true;
+    }, (chunk) => {
+      if (dirty) {
+        const key = active.map((a) => a.code).join('\0');
+        sgr = this.index.sgr.get(key);
+        if (sgr === undefined) {                                    // sgrKeys and sgrCloseKeys stay parallel
+          sgr = this.sgrKeys.push(key) - 1;
+          this.sgrCloseKeys.push(active.map((a) => a.endCode).join('\0'));
+          this.index.sgr.set(key, sgr);
+        }
+        link = intern(this.uris, this.index.uris, uri);
+        dirty = false;
+      }
+      for (const g of graphemes(chunk)) {
+        const cp = g.codePointAt(0);
+        let glyph = g, w, flags = 0;
+        if (g === '\t') { glyph = ' '; w = 0; flags = CELL_TAB; }
+        else if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) continue;
+        else if (g.length === 1 && this.substitute.some(([lo, hi]) => cp >= lo && cp <= hi)) { glyph = '�'; w = 1; }
+        else if ((w = Math.min(255, clusterWidth(g))) === 0) continue;
+        if (run < 0 || runs[2 * run] !== sgr || runs[2 * run + 1] !== link) { runs.push(sgr, link); run++; }
+        cells.push(intern(this.graphemes, this.index.graphemes, glyph), (run << CELL_RUN_SHIFT) | flags | w);
+      }
+    });
+    return { cells: Int32Array.from(cells), runs: Int32Array.from(runs) };
+  }
+  paint(screen, width, x, y, cells, count, _unused, chars, words) {
+    const sc = this.screen, damage = { from: Infinity, to: -1 };
+    const head = (sc.emptyWord & ~sc.widthMask) | sc.spacerHead;
+    let col = x;
+    for (let i = 0; i < count; i++) {
+      const p = cells[2 * i + 1], w = p & 255;
+      if (p & CELL_TAB) {
+        for (let n = sc.tabWidth - (col % sc.tabWidth); n > 0 && col < width; n--, col++) this.put(screen, width, col, y, sc.emptyCharIndex, sc.emptyWord, damage);
+        continue;
+      }
+      if (w === 0) continue;
+      if (w >= 2 && col + w > width) {                             // no room for a wide char: pad the row out
+        this.put(screen, width, col++, y, sc.emptyCharIndex, head, damage);
+        continue;
+      }
+      const word = words[p >>> CELL_RUN_SHIFT];
+      this.put(screen, width, col, y, chars[cells[2 * i]], word | (w >= 2 ? sc.wide : sc.narrow), damage);
+      for (let k = 2; k < w; k++) this.put(screen, width, col + k, y, sc.spacerCharIndex, word | sc.spacerTail, damage);
+      col += w >= 2 ? w : 1;
+    }
+    return packDamage(damage, col);
+  }
+  setCell(screen, width, x, y, char, word) {
+    const damage = { from: Infinity, to: -1 };
+    this.put(screen, width, x, y, char, word, damage);
+    return packDamage(damage, x + 1);
+  }
+  // Write one cell; a wide char's head and tail must never be split, so repair
+  // the half left behind when either is overwritten.
+  put(screen, width, x, y, char, word, damage) {
+    if (x < 0 || y < 0 || x >= width) return;
+    const sc = this.screen, m = sc.widthMask, i = (y * width + x) << 1;
+    if (i + 1 >= screen.length) return;
+    const clear = (j, col) => { screen[j] = sc.emptyCharIndex; screen[j + 1] = sc.emptyWord; touch(damage, col); };
+    const was = screen[i + 1] & m, now = word & m;
+    if (was === sc.wide && now !== sc.wide && x + 1 < width && (screen[i + 3] & m) === sc.spacerTail) clear(i + 2, x + 1);
+    if (was === sc.spacerTail && now !== sc.spacerTail && x > 0 && (screen[i - 1] & m) === sc.wide) clear(i - 2, x - 1);
+    screen[i] = char;
+    screen[i + 1] = word;
+    touch(damage, x);
+    if (now === sc.wide && x + 1 < width) {
+      if ((screen[i + 3] & m) === sc.wide && x + 2 < width && (screen[i + 5] & m) === sc.spacerTail) clear(i + 4, x + 2);
+      screen[i + 2] = sc.spacerCharIndex;
+      screen[i + 3] = (sc.emptyWord & ~m) | sc.spacerTail;
+      touch(damage, x + 1);
+    }
+  }
+}
+function touch(damage, col) {
+  if (col < damage.from) damage.from = col;
+  if (col > damage.to) damage.to = col;
+}
+function packDamage(damage, col) {
+  const cursor = Math.min(Math.max(col, 0), 0xfffff);
+  return damage.to < 0 ? cursor : (damage.to + 1) * 2 ** 36 + damage.from * 2 ** 20 + cursor;
+}
+
+// Bun.sleepSync: ink drains the terminal's pending replies in a short sync loop.
+function sleepSync(ms) {
+  const n = Number(ms);
+  if (n > 0) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, n);
+}
+
 // ---------------------------- assemble Bun ----------------------------------
 const Bun = {
   version: '1.4.0',
@@ -391,9 +647,13 @@ const Bun = {
   // Claude Code 2.1.270 probes Bun.unsafe.setJITPolicy?.(1) during startup.
   // Expose the namespace but leave engine-specific hooks absent under Node.
   unsafe: {},
+  // 2.1.273+ ink needs CellSegmenter. The other Bun.ant natives (peer
+  // credentials, memory pressure, prctl) sit behind typeof checks or try/catch.
+  ant: { CellSegmenter },
   stringWidth,
   wrapAnsi,
   stripANSI,
+  sliceAnsi,
   hash: bunHash,
   semver: { order: vcmp, satisfies },
   which,
@@ -411,12 +671,14 @@ const Bun = {
   generateHeapSnapshot: () => { try { return require('v8').getHeapStatistics(); } catch { return {}; } },
   get stdin() { return process.stdin; },
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  sleepSync,
   nanoseconds: () => Number(process.hrtime.bigint()),
   inspect: (x) => util.inspect(x),
   env: process.env,
   main: process.argv[1] || '',
 };
 Bun.hash.wyhash = bunHash;
+Bun.hash.xxHash64 = bunHash; // 2.1.280 keys an in-process dedup map with it
 
 globalThis.Bun = Bun;
 module.exports = Bun;

@@ -167,7 +167,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     let builds: BundledFile[];
     if (graph) {
       log.info('code-split ESM entry — re-bundling ' + graph.files.size + ' modules');
-      builds = await bundleGraph(graph, { shim: shimSource, polyfills, version, target });
+      builds = await bundleGraph(graph, { shim: shimSource, polyfills, version, target, warn: (msg) => log.warn(msg) });
     } else {
       builds = [{ name: 'cli.js', code: await transpile(debun(entrySource, shimSource, version), polyfills, target) }];
     }

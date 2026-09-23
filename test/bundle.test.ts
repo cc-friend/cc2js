@@ -88,7 +88,7 @@ test('bundleGraph re-bundles the graph into runnable CJS files', async () => {
         '// @bun\n// Claude Code notice.\n// Version: 9.9.9\n' +
         'import{hi}from"/$bunfs/root/chunk-aa11.js";' +
         'async function main(){const{bye}=await import("/$bunfs/root/chunk-bb22.js");' +
-        'return{hi:hi(),bye:bye(),root:import.meta.dirname,md:import.meta.require("/$bunfs/root/n.md")};}' +
+        'return{hi:hi(),bye:bye(),root:import.meta.dirname,dir:import.meta.dir,md:import.meta.require("/$bunfs/root/n.md")};}' +
         'module.exports=main();globalThis.W="/$bunfs/root/src/w/worker.js";'
     },
     { name: R + 'chunk-aa11.js', body: 'export const hi=()=>"hi";' },
@@ -133,5 +133,55 @@ test('bundleGraph re-bundles the graph into runnable CJS files', async () => {
   ]);
   const req = (p: string) => (p.startsWith(R) ? 'MD:' + p : require(p)); // the shim resolves bunfs paths for real
   fn(exports, req, mod, '/out/cli.js', '/out');
-  assert.deepEqual(await mod.exports, { hi: 'hi', bye: 'bye', root: '/out', md: 'MD:/$bunfs/root/n.md' });
+  // Bun's own `import.meta.dir` (2.1.280's built-in plugins read it) is `dirname` too
+  assert.deepEqual(await mod.exports, { hi: 'hi', bye: 'bye', root: '/out', dir: '/out', md: 'MD:/$bunfs/root/n.md' });
+});
+
+// A graph whose chunk defines the built-in plugins' hooks-module helper as `lq`.
+async function bundleHooksHelper(lq: string, warnings: string[]): Promise<unknown> {
+  const helper =
+    'function ku(){return typeof Bun<"u"&&Bun.isStandaloneExecutable===!0}' +
+    'var Tr=(e,o,r)=>({module:e,scan:o,dir:r});' +
+    lq;
+  const { parsed, modules } = fakeBinary([
+    {
+      name: R + 'cli',
+      body: 'import{Lq}from"/$bunfs/root/chunk-kt.js";module.exports=Lq(import.meta.dir,"m",()=>"s");'
+    },
+    { name: R + 'chunk-kt.js', body: helper + 'export{Lq};' }
+  ]);
+  parsed.modules = modules;
+  const [cli] = await bundleGraph(collectGraph(parsed, modules[0]), {
+    shim: 'globalThis.Bun = {};\n',
+    polyfills: '',
+    version: '9.9.9',
+    target: 'node18',
+    warn: (msg) => warnings.push(msg)
+  });
+  const mod = { exports: {} };
+  vm.compileFunction(cli.code.replace(/^#![^\n]*\n/, ''), ['exports', 'require', 'module', '__filename', '__dirname'])(
+    mod.exports,
+    require,
+    mod,
+    '/out/cli.js',
+    '/out'
+  );
+  return mod.exports;
+}
+
+test('bundleGraph hands built-in plugins the compiled-in hooks module, not a source folder', async () => {
+  // 2.1.280's helper, verbatim but for Tr: ku() is false under Node, which would
+  // send every built-in plugin looking for hooks/register.ts on disk
+  const warnings: string[] = [];
+  const out = await bundleHooksHelper('var Lq=(e,o,r)=>ku()?Tr(o,r(),e):{module:o,folder:e};', warnings);
+  assert.deepEqual(out, { module: 'm', scan: 's', dir: '/out' });
+  assert.deepEqual(warnings, []);
+});
+
+test('bundleGraph warns when a release reshapes the hooks-module helper past the patch', async () => {
+  const warnings: string[] = [];
+  const out = await bundleHooksHelper('var Lq=(e,o,r)=>ku()&&!0?Tr(o,r(),e):{module:o,folder:e};', warnings);
+  assert.deepEqual(out, { module: 'm', folder: '/out' }); // left as is
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /chunk-kt\.js/);
 });
