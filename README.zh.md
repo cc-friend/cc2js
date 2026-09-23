@@ -134,14 +134,16 @@ console.log(version, outDir);
 
 ## 开发
 
+需要 Node.js 和 Bun 1.4.2。开发依赖由 Bun 管理；CLI 及其测试仍在 Node 上运行。发布仍使用 npm，以便走 OIDC 可信发布。
+
 ```sh
-npm install
-npm run checkall   # tsc typecheck + biome lint + biome format check + unit tests (no writes)
-npm run fixall     # biome autofix (lint + format)
-npm test           # unit tests (tsx + node:test)
-npm run build      # compile TypeScript to dist/
-npm run e2e        # heavy: convert real releases and run cli.js across Node majors (network)
-npm run release:patch   # vbt: bump, commit, tag vX.Y.Z, push → triggers the publish workflow (also :minor / :major)
+bun install --frozen-lockfile
+bun run checkall   # tsc typecheck + biome lint + biome format check + unit tests (no writes)
+bun run fixall     # biome autofix (lint + format)
+bun run test       # unit tests (tsx + node:test)
+bun run build      # compile TypeScript to dist/
+bun run e2e        # heavy: convert real releases and run cli.js across Node majors (network)
+bun run release:patch   # vbt: bump, commit, tag vX.Y.Z, push → triggers the publish workflow (also :minor / :major)
 ```
 
 CI 在 push/PR 时跨 Node 18–24 运行 `checkall`。

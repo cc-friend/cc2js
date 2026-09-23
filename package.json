@@ -1,5 +1,6 @@
 {
   "name": "cc2js",
+  "packageManager": "bun@1.4.2",
   "version": "1.2.1",
   "description": "CLI that converts Bun-compiled binaries of any Claude Code version into a pure JavaScript build that runs on plain Node 18+",
   "keywords": [
@@ -44,25 +45,25 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "build": "bun run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint src test",
     "format": "biome format src test",
     "test": "tsx test/index.test.ts",
-    "checkall": "npm run typecheck && npm run lint && npm run format && npm run test",
+    "checkall": "bun run typecheck && bun run lint && bun run format && bun run test",
     "fixall": "biome check --write src test",
     "e2e": "tsx test/e2e.ts",
     "release:patch": "vbt patch",
     "release:minor": "vbt minor",
     "release:major": "vbt major",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "bun run build"
   },
   "vbt": {
     "push": true,
-    "preBump": "npm run checkall",
-    "postVerRepl": "npm install --package-lock-only --ignore-scripts",
+    "preBump": "bun run checkall",
+    "postVerRepl": "bun install --lockfile-only --ignore-scripts",
     "commitFiles": [
-      "package-lock.json"
+      "bun.lock"
     ]
   },
   "dependencies": {

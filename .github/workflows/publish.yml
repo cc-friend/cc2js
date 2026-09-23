@@ -23,14 +23,17 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm ci
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile
       - name: Verify tag matches package.json version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
           echo "tag=$TAG package.json=$PKG"
           test "$TAG" = "$PKG"
-      - run: npm run checkall
+      - run: bun run checkall
       - run: npm publish
       - name: Create GitHub Release
         run: gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes

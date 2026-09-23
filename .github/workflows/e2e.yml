@@ -24,8 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm ci
-      - run: npm run e2e -- --this-node --platform ${{ inputs.platform }} --versions ${{ inputs.versions }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile
+      - run: bun run e2e --this-node --platform ${{ inputs.platform }} --versions ${{ inputs.versions }}
 
   e2e-windows:
     runs-on: windows-latest
@@ -38,5 +41,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: npm ci
-      - run: npm run e2e -- --this-node --platform win32-x64 --versions ${{ inputs.versions }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile
+      - run: bun run e2e --this-node --platform win32-x64 --versions ${{ inputs.versions }}

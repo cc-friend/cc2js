@@ -203,8 +203,8 @@ async function main(): Promise<void> {
 
   // cc2js runs from dist/; build it before converting (unless only reading cache).
   if (!args.noConvert) {
-    process.stdout.write('building cc2js (npm run build)...\n');
-    cp.execSync('npm run build', { cwd: ROOT, stdio: 'inherit' });
+    process.stdout.write('building cc2js (bun run build)...\n');
+    cp.execSync('bun run build', { cwd: ROOT, stdio: 'inherit' });
   }
 
   const versions = args.noConvert ? listCachedVersions(args.platform) : await resolveVersions(args.versions);

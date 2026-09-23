@@ -134,14 +134,16 @@ console.log(version, outDir);
 
 ## Development
 
+Requires Node.js and Bun 1.4.2. Bun manages development dependencies; the CLI and its tests still run on Node. Publishing continues to use npm for OIDC trusted publishing.
+
 ```sh
-npm install
-npm run checkall   # tsc typecheck + biome lint + biome format check + unit tests (no writes)
-npm run fixall     # biome autofix (lint + format)
-npm test           # unit tests (tsx + node:test)
-npm run build      # compile TypeScript to dist/
-npm run e2e        # heavy: convert real releases and run cli.js across Node majors (network)
-npm run release:patch   # vbt: bump, commit, tag vX.Y.Z, push → triggers the publish workflow (also :minor / :major)
+bun install --frozen-lockfile
+bun run checkall   # tsc typecheck + biome lint + biome format check + unit tests (no writes)
+bun run fixall     # biome autofix (lint + format)
+bun run test       # unit tests (tsx + node:test)
+bun run build      # compile TypeScript to dist/
+bun run e2e        # heavy: convert real releases and run cli.js across Node majors (network)
+bun run release:patch   # vbt: bump, commit, tag vX.Y.Z, push → triggers the publish workflow (also :minor / :major)
 ```
 
 CI runs `checkall` across Node 18–24 on push/PR.
