@@ -162,9 +162,9 @@ function fromClaudeAi(version: string, platform: string, dest: string, log: Logg
         const actual = sha256(dest);
         if (actual !== checksum)
           throw new Error('checksum mismatch (' + actual.slice(0, 12) + '… ≠ ' + checksum.slice(0, 12) + '…)');
-        log.ok('checksum verified (sha256 ' + checksum.slice(0, 12) + '…)');
+        log.ok('Checksum verified (sha256 ' + checksum.slice(0, 12) + '…)');
       } else {
-        log.warn('no checksum in manifest for ' + platform + ' — skipping verification');
+        log.warn('No checksum in manifest for ' + platform + ' — skipping verification');
       }
       return dest;
     });
@@ -176,7 +176,7 @@ function fromGitHub(version: string, platform: string, workDir: string, log: Log
   const asset = 'claude-' + platform + '.tar.gz';
   const url = GH_BASE + '/v' + version + '/' + asset;
   const tgz = path.join(workDir, asset);
-  log.info('github → ' + asset);
+  log.info('GitHub → ' + asset);
   return downloadTo(url, tgz, { onProgress: progressBar(log) }).then(() => extractBinaryFromTarball(tgz, workDir, log));
 }
 
@@ -307,7 +307,7 @@ export function obtainBinary(input: string, platform: string, workDir: string, l
       return Promise.resolve(extractBinaryFromTarball(input, workDir, log));
     }
     log.step('Using local binary ' + path.basename(input));
-    if (!fileHasBunTrailer(input)) log.warn('file does not look like a Bun binary (no trailer) — trying anyway');
+    if (!fileHasBunTrailer(input)) log.warn('File does not look like a Bun binary (no trailer) — trying anyway');
     return Promise.resolve(input);
   }
 
@@ -323,7 +323,7 @@ export function obtainBinary(input: string, platform: string, workDir: string, l
         return fromGitHub(version, platform, workDir, log);
       })
       .catch((e2: unknown) => {
-        log.warn('github failed: ' + (e2 as Error).message);
+        log.warn('GitHub failed: ' + (e2 as Error).message);
         return fromNpm(version, platform, workDir, log);
       });
   });

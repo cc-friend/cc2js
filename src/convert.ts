@@ -22,7 +22,7 @@ import { hostPlatform, obtainBinary } from './download';
 import defaultLog, { type Logger } from './log';
 import { fetchRipgrep } from './ripgrep';
 import { transpile } from './transpile';
-import { sniffVersion } from './version';
+import { cc2jsVersion, sniffVersion } from './version';
 
 const ASSETS = path.join(__dirname, '..', 'assets');
 
@@ -121,7 +121,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-'));
   const cleanup = () => {
     if (opts.keepTemp) {
-      log.info('kept temp dir ' + workDir);
+      log.info('Kept temp dir ' + workDir);
       return;
     }
     try {
@@ -134,7 +134,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
   try {
     // 1) obtain the Bun binary
     const binPath = await obtainBinary(opts.input, platform, workDir, log);
-    log.ok('binary ready (' + fmtBytes(fs.statSync(binPath).size) + ')');
+    log.ok('Binary ready (' + fmtBytes(fs.statSync(binPath).size) + ')');
 
     // 2) parse the embedded module graph with unbunjs
     log.step('Parsing Bun module graph (unbunjs)');
@@ -144,7 +144,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     const entrySource = getModuleSource(parsed, entry);
     const version = sniffVersion(entrySource) || (/^[0-9.]+/.test(String(opts.input)) ? opts.input : 'unknown');
     log.ok(
-      'found ' +
+      'Found ' +
         parsed.modules.length +
         ' modules; entry=' +
         basename(entry.name) +
@@ -166,7 +166,7 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     const graph = isEsmGraph(entry, entrySource) ? collectGraph(parsed, entry) : null;
     let builds: BundledFile[];
     if (graph) {
-      log.info('code-split ESM entry — re-bundling ' + graph.files.size + ' modules');
+      log.info('Code-split ESM entry — re-bundling ' + graph.files.size + ' modules');
       builds = await bundleGraph(graph, { shim: shimSource, polyfills, version, target, warn: (msg) => log.warn(msg) });
     } else {
       builds = [{ name: 'cli.js', code: await transpile(debun(entrySource, shimSource, version), polyfills, target) }];
@@ -195,9 +195,9 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
       assetBytes += size;
       if (/\.(node|wasm)$/.test(m.name)) addons.push(basename(m.name) + ' (' + fmtBytes(size) + ')');
     }
-    if (addons.length) log.ok('native addons: ' + addons.join(', '));
+    if (addons.length) log.ok('Native addons: ' + addons.join(', '));
     if (assets > addons.length) {
-      log.ok('embedded files: ' + assets + ' (' + fmtBytes(assetBytes) + ')');
+      log.ok('Embedded files: ' + assets + ' (' + fmtBytes(assetBytes) + ')');
     }
 
     // 6) output package.json + runtime deps
@@ -209,7 +209,8 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
       type: 'commonjs',
       bin: { claude: 'cli.js' },
       engines: { node: '>=18' },
-      dependencies: RUNTIME_DEPS
+      dependencies: RUNTIME_DEPS,
+      cc2js: cc2jsVersion() // which converter built this; install warns when a cached build predates it
     };
     fs.writeFileSync(path.join(outDir, 'package.json'), JSON.stringify(outPkg, null, 2) + '\n');
 

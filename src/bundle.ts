@@ -161,7 +161,7 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
   });
   if (unpatched.length) {
     opts.warn?.(
-      'built-in plugin hooks helper not recognised in ' +
+      'Built-in plugin hooks helper not recognised in ' +
         unpatched.join(', ') +
         ' — built-in plugins may fail to load ("not readable (ENOENT)")'
     );

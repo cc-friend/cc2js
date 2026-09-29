@@ -4,7 +4,6 @@
  *   cc2js [<version|latest|stable|tarball|binary>] [options]
  *   cc2js                # shortcut for `cc2js latest` (install/update `cc2`)
  */
-import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
 import { convert } from './convert';
@@ -13,11 +12,7 @@ import { cc2Home, defaultBinDir, install } from './install';
 import { delinkLauncher } from './link';
 import log from './log';
 import { clean, type LinkEntry, listLinks, listVersions, removeVersion, type VersionEntry } from './manage';
-
-function pkgVersion(): string {
-  const p = path.join(__dirname, '..', 'package.json');
-  return (JSON.parse(fs.readFileSync(p, 'utf8')) as { version: string }).version;
-}
+import { cc2jsVersion } from './version';
 
 export interface Args {
   _: string[];
@@ -161,7 +156,7 @@ function help(): void {
   const binDefault = process.platform === 'win32' ? '%USERPROFILE%\\.cc2js\\bin' : '~/.local/bin';
   process.stdout.write(
     'cc2js ' +
-      pkgVersion() +
+      cc2jsVersion() +
       ' — Bun-compiled Claude Code → pure Node\n\n' +
       'Usage:\n' +
       '  cc2js [<version|latest|stable|tarball|binary>] [options]\n' +
@@ -238,8 +233,8 @@ export async function runManage(sub: string, args: Args): Promise<void> {
   if (sub === 'rm') {
     if (!target) throw new Error('usage: cc2js rm <version>');
     const r = removeVersion(target, versionsDir, binDir); // throws on unknown version
-    for (const d of r.removed) log.ok('removed ' + d);
-    for (const d of r.delinked) log.ok('delinked ' + d);
+    for (const d of r.removed) log.ok('Removed ' + d);
+    for (const d of r.delinked) log.ok('Delinked ' + d);
     return;
   }
 
@@ -247,7 +242,7 @@ export async function runManage(sub: string, args: Args): Promise<void> {
     const name = target ?? 'cc2';
     const removed = delinkLauncher(binDir, name);
     if (!removed.length) throw new Error('no cc2js launcher named "' + name + '" in ' + binDir);
-    for (const p of removed) log.ok('delinked ' + p);
+    for (const p of removed) log.ok('Delinked ' + p);
     return;
   }
 
@@ -255,12 +250,12 @@ export async function runManage(sub: string, args: Args): Promise<void> {
   if (!args.yes) {
     if (!process.stdin.isTTY) throw new Error('refusing to clean without --yes (non-interactive)');
     if (!(await confirm('Remove ALL cc2js versions and links? [y/N] '))) {
-      log.info('aborted');
+      log.info('Aborted');
       return;
     }
   }
   const r = clean(versionsDir, binDir);
-  log.ok('removed ' + r.removedVersions.length + ' version(s), ' + r.delinked.length + ' launcher file(s)');
+  log.ok('Removed ' + r.removedVersions.length + ' version(s), ' + r.delinked.length + ' launcher file(s)');
 }
 
 function confirm(prompt: string): Promise<boolean> {
@@ -283,7 +278,7 @@ function main(): void {
   }
 
   if (args.version) {
-    process.stdout.write(pkgVersion() + '\n');
+    process.stdout.write(cc2jsVersion() + '\n');
     return;
   }
   if (args.help) {
@@ -302,7 +297,7 @@ function main(): void {
 
   const platform = args.platform ?? hostPlatform();
   if (args.platform && !PLATFORMS.includes(args.platform)) {
-    log.warn('unusual platform "' + args.platform + '" (known: ' + PLATFORMS.join(', ') + ')');
+    log.warn('Unusual platform "' + args.platform + '" (known: ' + PLATFORMS.join(', ') + ')');
   }
 
   let target: string;
@@ -325,7 +320,7 @@ function main(): void {
 
   if (doLink) {
     if (args.platform && args.platform !== hostPlatform()) {
-      log.warn('linking a ' + platform + ' build; it will not run on this host (' + hostPlatform() + ')');
+      log.warn('Linking a ' + platform + ' build; it will not run on this host (' + hostPlatform() + ')');
     }
     if (!args.install) log.warn('--no-install while linking: the linked command will lack runtime deps');
     install({
@@ -348,20 +343,20 @@ function main(): void {
         if (r.status === 'unchanged') {
           log.ok(linkName + ' already up to date → ' + r.launcherPath + '  [Claude Code ' + r.version + ']');
         } else {
-          const verb = r.status === 'linked' ? 'linked' : 'updated';
+          const verb = r.status === 'linked' ? 'Linked' : 'Updated';
           const ver =
             r.status === 'updated' && r.previousVersion && r.previousVersion !== r.version
               ? r.previousVersion + ' → ' + r.version
               : r.version;
           log.ok(verb + ' ' + linkName + ' → ' + r.launcherPath + '  [Claude Code ' + ver + ']');
         }
-        if (r.ccFlags.length) log.info('baked flags: ' + r.ccFlags.join(' '));
+        if (r.ccFlags.length) log.info('Baked flags: ' + r.ccFlags.join(' '));
         if (!r.onPath) {
           const dir = path.dirname(r.launcherPath);
           const ap = r.addPath;
           if (ap?.changed) {
-            log.ok('added to PATH (' + ap.target + ')');
-            log.warn('open a NEW terminal to use ' + linkName + (ap.activate ? ', or run now:  ' + ap.activate : ''));
+            log.ok('Added to PATH (' + ap.target + ')');
+            log.warn('Open a NEW terminal to use ' + linkName + (ap.activate ? ', or run now:  ' + ap.activate : ''));
           } else if (ap?.ok) {
             log.warn(
               dir +
@@ -370,16 +365,16 @@ function main(): void {
             );
           } else {
             log.warn(dir + ' is not on PATH.');
-            if (ap?.manualLine) log.warn('add it by hand:  ' + ap.manualLine);
+            if (ap?.manualLine) log.warn('Add it by hand:  ' + ap.manualLine);
             else if (process.platform === 'win32') {
-              log.warn('add it to your user PATH:  ' + r.pathHint);
-              log.warn('or: System → Environment Variables → Path → New → ' + dir);
+              log.warn('Add it to your user PATH:  ' + r.pathHint);
+              log.warn('Or: System → Environment Variables → Path → New → ' + dir);
             } else {
-              log.warn('add it to your shell rc (~/.bashrc, ~/.zshrc, ~/.profile):  ' + r.pathHint);
+              log.warn('Add it to your shell rc (~/.bashrc, ~/.zshrc, ~/.profile):  ' + r.pathHint);
             }
           }
         }
-        log.step('run:  ' + linkName + ' --version');
+        log.step('Run:  ' + linkName + ' --version');
         process.exit(0);
       })
       .catch(fail);
@@ -397,7 +392,7 @@ function main(): void {
     log
   })
     .then((r) => {
-      log.ok('converted Claude Code ' + r.version + ' → ' + r.outDir);
+      log.ok('Converted Claude Code ' + r.version + ' → ' + r.outDir);
       process.exit(0);
     })
     .catch(fail);

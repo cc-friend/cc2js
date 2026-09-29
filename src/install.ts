@@ -11,6 +11,7 @@ import { type ConvertOptions, convert } from './convert';
 import { hostPlatform, resolveChannel } from './download';
 import { linkLauncher, parseLauncher } from './link';
 import defaultLog, { type Logger } from './log';
+import { cc2jsVersion } from './version';
 
 export function cc2Home(): string {
   return path.join(os.homedir(), '.cc2js');
@@ -67,6 +68,37 @@ function convertTo(opts: InstallOptions, input: string, platform: string, out: s
   return convert(co);
 }
 
+/**
+ * A cached build made by another cc2js misses whatever fixes that release carries,
+ * so say how to rebuild it. Older builds record no `cc2js` in their package.json.
+ */
+export function staleBuildHint(
+  outDir: string,
+  version: string,
+  platform?: string,
+  current = cc2jsVersion()
+): string | undefined {
+  let built: string | undefined;
+  try {
+    built = (JSON.parse(fs.readFileSync(path.join(outDir, 'package.json'), 'utf8')) as { cc2js?: string }).cc2js;
+  } catch {
+    /* unreadable: treat as unknown */
+  }
+  if (built === current) return undefined;
+  return (
+    'Cached Claude Code ' +
+    version +
+    ' was converted by ' +
+    (built ? 'cc2js ' + built : 'an older cc2js') +
+    ', not this cc2js ' +
+    current +
+    '. If you have problems running the old build, run cc2js ' +
+    version +
+    (platform ? ' -p ' + platform : '') +
+    ' --force to rebuild it'
+  );
+}
+
 export function resolveCcFlags(
   given: string[] | undefined,
   noCcFlags: boolean | undefined,
@@ -108,7 +140,9 @@ export async function install(opts: InstallOptions): Promise<InstallResult> {
     outDir = path.join(versionsDir, version + '-' + platform);
     if (!opts.force && fs.existsSync(path.join(outDir, 'cli.js'))) {
       cached = true;
-      log.ok('already installed: Claude Code ' + version + ' (' + platform + ')');
+      log.ok('Already installed: Claude Code ' + version + ' (' + platform + ')');
+      const stale = staleBuildHint(outDir, version, platform === hostPlatform() ? undefined : platform);
+      if (stale) log.warn(stale);
     } else {
       await convertTo(opts, version, platform, outDir, log);
     }

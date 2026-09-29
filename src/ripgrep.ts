@@ -30,7 +30,7 @@ const TRIPLES: Record<string, string> = {
 export async function fetchRipgrep(platform: string, destPath: string, workDir: string, log: Logger): Promise<boolean> {
   const triple = TRIPLES[platform];
   if (!triple) {
-    log.warn('no ripgrep build mapped for ' + platform + ' — skipping rg');
+    log.warn('No ripgrep build mapped for ' + platform + ' — skipping rg');
     return false;
   }
   const isWin = platform.startsWith('win32-');
