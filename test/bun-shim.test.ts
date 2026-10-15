@@ -40,7 +40,8 @@ test('Bun shim supports the startup JIT probe in ESM entry and worker bundles', 
         [chunk, startup],
         [worker, `import "${chunk}";`]
       ]),
-      extras: [worker]
+      extras: [worker],
+      reachable: 3
     },
     { shim, polyfills: '', version: '2.1.270', target: 'node18' }
   );

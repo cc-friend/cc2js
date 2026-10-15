@@ -53,6 +53,18 @@ export interface ConvertResult {
   modules: number;
 }
 
+function bundleBar(loaded: number, total: number, frame: number): string {
+  const width = 20;
+  if (loaded < total) {
+    const filled = Math.round((loaded / total) * width);
+    return 'Loading modules  ' + '█'.repeat(filled) + '░'.repeat(width - filled) + '  ' + loaded + '/' + total;
+  }
+  const at = Math.floor(frame / 2) % (width + 4); // a 4-cell block crossing the bar
+  let bar = '';
+  for (let i = 0; i < width; i++) bar += i >= at - 4 && i < at ? '█' : '░';
+  return 'Linking + writing output  ' + bar;
+}
+
 function fmtBytes(n: number): string {
   if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
   if (n >= 1024) return (n / 1024).toFixed(0) + ' KB';
@@ -166,8 +178,27 @@ export async function convert(opts: ConvertOptions): Promise<ConvertResult> {
     const graph = isEsmGraph(entry, entrySource) ? collectGraph(parsed, entry) : null;
     let builds: BundledFile[];
     if (graph) {
-      log.info('Code-split ESM entry — re-bundling ' + graph.files.size + ' modules');
-      builds = await bundleGraph(graph, { shim: shimSource, polyfills, version, target, warn: (msg) => log.warn(msg) });
+      log.info('Code-split ESM entry — re-bundling ' + graph.reachable + ' modules');
+      // esbuild-wasm takes minutes over this and prints nothing, so keep a live
+      // line going: a module count while it loads, then a sweep while it links
+      // and writes (a stretch with no callbacks to count).
+      let loaded = 0;
+      let frame = 0;
+      const stop = log.progress?.(() => bundleBar(loaded, graph.reachable, frame++));
+      try {
+        builds = await bundleGraph(graph, {
+          shim: shimSource,
+          polyfills,
+          version,
+          target,
+          warn: (msg) => log.warn(msg),
+          onModule: () => {
+            loaded++;
+          }
+        });
+      } finally {
+        stop?.();
+      }
     } else {
       builds = [{ name: 'cli.js', code: await transpile(debun(entrySource, shimSource, version), polyfills, target) }];
     }

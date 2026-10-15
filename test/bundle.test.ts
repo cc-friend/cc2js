@@ -67,6 +67,7 @@ test('collectGraph takes the JS modules and flags the path-referenced ones as ex
     { name: R + 'chunk-aa11.js', body: 'export const a = 1;' },
     { name: R + 'quiet.js', body: 'export const q = 1;' },
     { name: R + 'src/w/worker.js', body: 'export const w = 1;' },
+    { name: R + 'orphan.js', body: 'export const o = 1;' },
     { name: R + 'mermaid.min.js', body: Buffer.from([0, 1, 2]), encoding: 'binary', format: 'none' },
     { name: R + 'notes.md', body: 'hi', format: 'none' }
   ]);
@@ -74,10 +75,11 @@ test('collectGraph takes the JS modules and flags the path-referenced ones as ex
   const graph = collectGraph(parsed, modules[0]);
   assert.deepEqual(
     [...graph.files.keys()].sort(),
-    [R + 'chunk-aa11.js', R + 'cli', R + 'quiet.js', R + 'src/w/worker.js'] // file assets are not modules
+    [R + 'chunk-aa11.js', R + 'cli', R + 'orphan.js', R + 'quiet.js', R + 'src/w/worker.js'] // file assets are not modules
   );
   // only the worker: the others are reached by `import`, and notes.md is no module
   assert.deepEqual(graph.extras, [R + 'src/w/worker.js']);
+  assert.equal(graph.reachable, 4, 'cli, the chunk and quiet.js it imports, and the worker; not the orphan');
 });
 
 test('bundleGraph re-bundles the graph into runnable CJS files', async () => {
@@ -100,13 +102,20 @@ test('bundleGraph re-bundles the graph into runnable CJS files', async () => {
   ]);
   parsed.modules = modules;
 
-  const built = await bundleGraph(collectGraph(parsed, modules[0]), {
+  let loads = 0;
+  const graph = collectGraph(parsed, modules[0]);
+  const built = await bundleGraph(graph, {
     shim: 'globalThis.Bun = {};\n',
     polyfills: '/* POLYFILLS */',
     version: '9.9.9',
-    target: 'node18'
+    target: 'node18',
+    onModule: () => {
+      loads++;
+    }
   });
 
+  assert.equal(loads, 4, 'one progress tick per graph module, shared chunk counted once');
+  assert.equal(graph.reachable, loads, 'the scan predicts what esbuild loads, import.meta.require included');
   assert.deepEqual(
     built.map((b) => b.name),
     ['cli.js', 'src/w/worker.js']

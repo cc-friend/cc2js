@@ -79,6 +79,8 @@ export interface EsmGraph {
   files: Map<string, string>;
   /** graph modules also loaded by path at runtime; each needs its own file */
   extras: string[];
+  /** how many modules esbuild will load from the entry and extras (for progress) */
+  reachable: number;
 }
 
 export interface BundleOptions {
@@ -88,6 +90,8 @@ export interface BundleOptions {
   target: string;
   /** told when a source patch no longer matches this release */
   warn?: (msg: string) => void;
+  /** told each time esbuild loads one graph module (for a progress display) */
+  onModule?: () => void;
 }
 
 export interface BundledFile {
@@ -110,7 +114,7 @@ export function collectGraph(parsed: ParsedBunBinary, entry: BunModule): EsmGrap
     if (m.module_format === 'esm' || m.module_format === 'cjs') files.set(m.name, getModuleSource(parsed, m));
   }
   files.set(entry.name, getModuleSource(parsed, entry));
-  return { entry: entry.name, files, extras: pathReferenced(files, entry.name) };
+  return { entry: entry.name, files, ...scanReferences(files, entry.name) };
 }
 
 /*
@@ -118,17 +122,35 @@ export function collectGraph(parsed: ParsedBunBinary, entry: BunModule): EsmGrap
  * of their own: the function-hooks worker, say, is spawned from its
  * `/$bunfs/root/…` URL rather than imported. Import specifiers name modules too,
  * so drop the occurrences an `import`/`require` is reaching for and keep the rest.
+ *
+ * The specifiers are the edges esbuild follows, so walking them from the entry
+ * and the extras also counts the modules the bundle step will load.
  */
-function pathReferenced(files: Map<string, string>, entry: string): string[] {
+function scanReferences(files: Map<string, string>, entry: string): { extras: string[]; reachable: number } {
   const found = new Set<string>();
-  for (const source of files.values()) {
+  const imports = new Map<string, string[]>();
+  for (const [from, source] of files) {
+    const to: string[] = [];
     for (const m of source.matchAll(BUNFS_LITERAL)) {
       const name = m[1];
-      if (name === entry || found.has(name) || !files.has(name)) continue;
-      if (!SPECIFIER_OF.test(source.slice(Math.max(0, m.index - 12), m.index))) found.add(name);
+      if (!files.has(name)) continue;
+      if (SPECIFIER_OF.test(source.slice(Math.max(0, m.index - 12), m.index))) to.push(name);
+      else if (name !== entry) found.add(name);
+    }
+    imports.set(from, to);
+  }
+  const extras = [...found].sort();
+  const seen = new Set([entry, ...extras]);
+  const queue = [...seen];
+  for (let name = queue.pop(); name !== undefined; name = queue.pop()) {
+    for (const next of imports.get(name) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
     }
   }
-  return [...found].sort();
+  return { extras, reachable: seen.size };
 }
 
 /** `/$bunfs/root/a/b.js` (or the Windows `B:\~BUN\root\a\b.js`) → `a/b.js`. */
@@ -157,7 +179,7 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
     legalComments: 'inline',
     logLevel: 'silent',
     define: IMPORT_META,
-    plugins: [graphPlugin(graph.files, unpatched)]
+    plugins: [graphPlugin(graph.files, unpatched, opts.onModule)]
   });
   if (unpatched.length) {
     opts.warn?.(
@@ -180,7 +202,7 @@ export async function bundleGraph(graph: EsmGraph, opts: BundleOptions): Promise
   );
 }
 
-function graphPlugin(files: Map<string, string>, unpatched: string[]): Plugin {
+function graphPlugin(files: Map<string, string>, unpatched: string[], onModule?: () => void): Plugin {
   return {
     name: NS,
     setup(build) {
@@ -192,6 +214,7 @@ function graphPlugin(files: Map<string, string>, unpatched: string[]): Plugin {
         files.has(args.path) ? { path: args.path, namespace: NS } : { path: args.path, external: true }
       );
       build.onLoad({ filter: /.*/, namespace: NS }, (args) => {
+        onModule?.();
         const contents = patchSource(files.get(args.path) ?? '');
         if (HOOKS_MODULE_FOLDER.test(contents)) unpatched.push(bunfsRelative(args.path));
         return { contents, loader: 'js' };
