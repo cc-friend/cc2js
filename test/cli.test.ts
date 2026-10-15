@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -83,18 +84,50 @@ test('parseArgs collects flags after -- and handles --no-cc-flags/--yes', () => 
   assert.deepEqual(d.ccFlags, null);
 
   assert.equal(parseArgs(['clean', '-y']).yes, true);
+  assert.equal(parseArgs(['clean', '--all']).all, true);
+  assert.equal(parseArgs(['clean']).all, false);
   assert.equal(parseArgs(['latest']).yes, false);
   assert.equal(parseArgs(['latest']).noCcFlags, false);
 });
+
+// Run fn with the home dir (and so ~/.cc2js) pointed at a fresh temp dir.
+async function withHome(fn: (home: string) => Promise<void>): Promise<void> {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-home-'));
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
+  try {
+    await fn(home);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
 
 test('runManage("clean") without --yes and no TTY rejects', async () => {
   const orig = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
   Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
   try {
-    await assert.rejects(
-      runManage('clean', parseArgs(['clean', '--bin-dir', path.join(os.tmpdir(), 'cc2js-nope')])),
-      /confirm|--yes/i
-    );
+    await withHome(async (home) => {
+      fs.mkdirSync(path.join(home, '.cc2js', 'versions', '2.1.199-linux-x64'), { recursive: true });
+      await assert.rejects(
+        runManage('clean', parseArgs(['clean', '--bin-dir', path.join(home, 'bin')])),
+        /confirm|--yes/i
+      );
+      assert.ok(fs.existsSync(path.join(home, '.cc2js', 'versions', '2.1.199-linux-x64')));
+    });
+  } finally {
+    if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
+  }
+});
+
+test('runManage("clean") with nothing to remove needs no confirmation', async () => {
+  const orig = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+  Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+  try {
+    await withHome((home) => runManage('clean', parseArgs(['clean', '--bin-dir', path.join(home, 'bin')])));
   } finally {
     if (orig) Object.defineProperty(process.stdin, 'isTTY', orig);
   }

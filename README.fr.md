@@ -45,7 +45,7 @@ Lister les versions et liens installés, ou tout supprimer :
 
 ```sh
 cc2js ls
-cc2js clean  # tout supprimer ; ou : rm <version>, delink [name]
+cc2js clean  # supprimer les versions qu'aucune commande n'utilise (--all : tout) ; ou : rm <version>, delink [name]
 ```
 
 ## Pourquoi
@@ -71,7 +71,7 @@ Les addons natifs et `rg` sont spécifiques à la plateforme ; construisez donc 
 ```
 cc2js [<version|latest|stable|tarball|binary>] [options]
 cc2js                  installer/mettre à jour le dernier en `cc2` (= cc2js latest)
-cc2js ls | rm <version> | delink [name] | clean   gérer les versions et liens installés
+cc2js ls | rm <version> | delink [name] | clean [--all]   gérer les versions et liens installés
 
 Toute version s'installe par défaut (dans ~/.cc2js, en `cc2` sur le PATH) ; passez -o pour un dossier.
 
@@ -102,7 +102,8 @@ Gestion :
   cc2js ls             lister les versions et liens installés
   cc2js rm <version>   supprimer une version (délie en cascade)
   cc2js delink [name]  supprimer un lanceur (par défaut : cc2)
-  cc2js clean          supprimer toutes les versions et liens (confirmation y/N, ou --yes)
+  cc2js clean          supprimer les versions vers lesquelles aucun lanceur ne pointe (confirmation y/N, ou --yes)
+  cc2js clean --all    supprimer toutes les versions et liens, y compris ceux en service
   (tous acceptent --bin-dir <dir>)
 ```
 

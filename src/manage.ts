@@ -112,24 +112,55 @@ export function removeVersion(
   const removed: string[] = [];
   const delinked: string[] = [];
   for (const e of entries) {
-    for (const l of listLinks(binDir)) {
-      if (l.target.startsWith(e.dir + path.sep)) {
-        delinked.push(...delinkLauncher(binDir, l.name));
-      }
-    }
+    for (const name of linkedAs(e, listLinks(binDir))) delinked.push(...delinkLauncher(binDir, name));
     fs.rmSync(e.dir, { recursive: true, force: true });
     removed.push(e.dir);
   }
   return { removed, delinked };
 }
 
-export function clean(versionsDir: string, binDir: string): { removedVersions: string[]; delinked: string[] } {
-  const delinked: string[] = [];
-  for (const l of listLinks(binDir)) delinked.push(...delinkLauncher(binDir, l.name));
-  const removedVersions: string[] = [];
+/** The launcher names pointing into version `v`. */
+export function linkedAs(v: VersionEntry, links: LinkEntry[]): string[] {
+  return links.filter((l) => l.target.startsWith(v.dir + path.sep)).map((l) => l.name);
+}
+
+export interface CleanPlan {
+  /** versions clean() would delete */
+  remove: VersionEntry[];
+  /** versions it keeps, each with the launchers that point at it */
+  keep: { version: VersionEntry; links: string[] }[];
+  /** launchers it would delete (only with `all`) */
+  delink: string[];
+}
+
+/*
+ * By default clean frees the disk without breaking a command: it deletes the
+ * versions no launcher points at and leaves the linked ones and their launchers
+ * alone. `all` deletes every version and every launcher.
+ */
+export function planClean(versionsDir: string, binDir: string, all = false): CleanPlan {
+  const links = listLinks(binDir);
+  const plan: CleanPlan = { remove: [], keep: [], delink: all ? links.map((l) => l.name) : [] };
   for (const v of listVersions(versionsDir)) {
+    const names = linkedAs(v, links);
+    if (all || !names.length) plan.remove.push(v);
+    else plan.keep.push({ version: v, links: names });
+  }
+  return plan;
+}
+
+export function clean(
+  versionsDir: string,
+  binDir: string,
+  all = false
+): { removedVersions: string[]; delinked: string[]; kept: string[] } {
+  const plan = planClean(versionsDir, binDir, all);
+  const delinked: string[] = [];
+  for (const name of plan.delink) delinked.push(...delinkLauncher(binDir, name));
+  const removedVersions: string[] = [];
+  for (const v of plan.remove) {
     fs.rmSync(v.dir, { recursive: true, force: true });
     removedVersions.push(v.dir);
   }
-  return { removedVersions, delinked };
+  return { removedVersions, delinked, kept: plan.keep.map((k) => k.version.dir) };
 }

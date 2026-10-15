@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { linkLauncher } from '../src/link';
-import { clean, listLinks, listVersions, removeVersion } from '../src/manage';
+import { clean, listLinks, listVersions, planClean, removeVersion } from '../src/manage';
 
 const isWin = process.platform === 'win32';
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'cc2js-manage-'));
@@ -67,7 +67,49 @@ test('removeVersion deletes the version dir and cascades delink', () => {
   assert.throws(() => removeVersion('9.9.9', root, bin), /no such installed version/);
 });
 
-test('clean removes all versions and all links', () => {
+test('clean keeps the linked versions and their launchers by default', () => {
+  const root = tmp();
+  const bin = path.join(root, 'bin');
+  const plat = isWin ? 'win32-x64' : 'linux-x64';
+  const linked = seedVersion(root, '2.1.199', plat);
+  const old = seedVersion(root, '2.1.198', plat);
+  const other = seedVersion(root, '2.1.200', plat);
+  linkLauncher({ cliPath: path.join(linked, 'cli.js'), name: 'cc2', binDir: bin, version: '2.1.199', platform: plat });
+  linkLauncher({
+    cliPath: path.join(other, 'cli.js'),
+    name: 'cc2-next',
+    binDir: bin,
+    version: '2.1.200',
+    platform: plat
+  });
+
+  const plan = planClean(root, bin);
+  assert.deepEqual(
+    plan.remove.map((v) => v.dir),
+    [old]
+  );
+  assert.deepEqual(plan.keep.map((k) => [k.version.version, k.links]).sort(), [
+    ['2.1.199', ['cc2']],
+    ['2.1.200', ['cc2-next']] // any launcher counts, not just cc2
+  ]);
+  assert.deepEqual(plan.delink, []);
+
+  const res = clean(root, bin);
+  assert.deepEqual(res.removedVersions, [old]);
+  assert.deepEqual(res.delinked, []);
+  assert.equal(res.kept.length, 2);
+  assert.deepEqual(
+    listVersions(root)
+      .map((v) => v.version)
+      .sort(),
+    ['2.1.199', '2.1.200']
+  );
+  assert.equal(listLinks(bin).length, 2);
+
+  assert.equal(planClean(root, bin).remove.length, 0, 'a second clean has nothing left to do');
+});
+
+test('clean --all removes every version and every link', () => {
   const root = tmp();
   const bin = path.join(root, 'bin');
   const plat = isWin ? 'win32-x64' : 'linux-x64';
@@ -75,9 +117,10 @@ test('clean removes all versions and all links', () => {
   seedVersion(root, '2.1.200', plat);
   linkLauncher({ cliPath: path.join(dir, 'cli.js'), name: 'cc2', binDir: bin, version: '2.1.199', platform: plat });
 
-  const res = clean(root, bin);
+  const res = clean(root, bin, true);
   assert.equal(res.removedVersions.length, 2);
   assert.ok(res.delinked.length >= 1);
+  assert.deepEqual(res.kept, []);
   assert.equal(listVersions(root).length, 0);
   assert.equal(listLinks(bin).length, 0);
 });

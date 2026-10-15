@@ -11,7 +11,16 @@ import { hostPlatform, PLATFORMS } from './download';
 import { cc2Home, defaultBinDir, install } from './install';
 import { delinkLauncher } from './link';
 import log from './log';
-import { clean, type LinkEntry, listLinks, listVersions, removeVersion, type VersionEntry } from './manage';
+import {
+  clean,
+  type LinkEntry,
+  linkedAs,
+  listLinks,
+  listVersions,
+  planClean,
+  removeVersion,
+  type VersionEntry
+} from './manage';
 import { cc2jsVersion } from './version';
 
 export interface Args {
@@ -30,6 +39,7 @@ export interface Args {
   ccFlags: string[] | null; // flags after `--` to bake into the launcher (null = not given)
   noCcFlags: boolean;
   yes: boolean;
+  all: boolean; // clean --all: linked versions and launchers too
   help: boolean;
   version: boolean;
 }
@@ -51,6 +61,7 @@ export function parseArgs(argv: string[]): Args {
     ccFlags: null,
     noCcFlags: false,
     yes: false,
+    all: false,
     help: false,
     version: false
   };
@@ -116,6 +127,9 @@ export function parseArgs(argv: string[]): Args {
       case '--yes':
         a.yes = true;
         break;
+      case '--all':
+        a.all = true;
+        break;
       default:
         if (x.startsWith('--link-name=')) a.linkName = x.slice(12);
         else if (x.startsWith('--bin-dir=')) a.binDir = x.slice(10);
@@ -161,7 +175,7 @@ function help(): void {
       'Usage:\n' +
       '  cc2js [<version|latest|stable|tarball|binary>] [options]\n' +
       '  cc2js                  install/update the latest Claude Code as `cc2` (= cc2js latest)\n' +
-      '  cc2js ls | rm <version> | delink [name] | clean   manage installed versions & links\n\n' +
+      '  cc2js ls | rm <version> | delink [name] | clean [--all]   manage installed versions & links\n\n' +
       'By default cc2js installs to ~/.cc2js and puts a `cc2` command on PATH.\n' +
       'Pass -o (or --no-link) to just convert into a folder instead.\n\n' +
       'Options:\n' +
@@ -186,6 +200,7 @@ function help(): void {
       '  -- <claude flags…>       bake flags into the launcher (e.g. -- --dangerously-skip-permissions)\n' +
       '      --no-cc-flags        clear any previously-baked flags on update\n' +
       '  -y, --yes                skip the confirmation prompt (clean)\n' +
+      '      --all                clean: also remove linked versions and their launchers\n' +
       '  -h, --help / -v, --version\n'
   );
 }
@@ -203,7 +218,7 @@ export function renderLs(versionsDir: string, versions: VersionEntry[], links: L
   if (!versions.length) lines.push('  (none)');
   for (const v of versions) {
     const mb = (v.bytes / 1e6).toFixed(1) + ' MB';
-    const used = links.some((l) => l.target.startsWith(v.dir + path.sep)) ? '  ← linked' : '';
+    const used = linkedAs(v, links).length ? '  ← linked' : '';
     lines.push('  ' + v.version + '  ' + v.platform + '  ' + mb + used);
   }
   lines.push('');
@@ -246,16 +261,28 @@ export async function runManage(sub: string, args: Args): Promise<void> {
     return;
   }
 
-  // clean
+  // clean: the unlinked versions, or with --all everything
+  const plan = planClean(versionsDir, binDir, args.all);
+  const host = hostPlatform();
+  const label = (v: VersionEntry) => v.version + (v.platform === host ? '' : '-' + v.platform);
+  const keeping = plan.keep.map((k) => label(k.version) + ', linked as ' + k.links.join(', ')).join('; ');
+  if (!plan.remove.length && !plan.delink.length) {
+    log.info('Nothing to clean' + (keeping ? ' (keeping ' + keeping + ')' : ''));
+    return;
+  }
   if (!args.yes) {
     if (!process.stdin.isTTY) throw new Error('refusing to clean without --yes (non-interactive)');
-    if (!(await confirm('Remove ALL cc2js versions and links? [y/N] '))) {
+    const what = args.all
+      ? 'ALL cc2js versions and links'
+      : plan.remove.map(label).join(', ') + (keeping ? ' (keeping ' + keeping + ')' : '');
+    if (!(await confirm('Remove ' + what + '? [y/N] '))) {
       log.info('Aborted');
       return;
     }
   }
-  const r = clean(versionsDir, binDir);
+  const r = clean(versionsDir, binDir, args.all);
   log.ok('Removed ' + r.removedVersions.length + ' version(s), ' + r.delinked.length + ' launcher file(s)');
+  if (keeping) log.info('Kept ' + keeping + ' (`cc2js clean --all` removes linked versions too)');
 }
 
 function confirm(prompt: string): Promise<boolean> {

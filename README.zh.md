@@ -45,7 +45,7 @@ cc2js -- --dangerously-skip-permissions
 
 ```sh
 cc2js ls
-cc2js clean  # 删除全部；或用 rm <version>，或 delink [name]
+cc2js clean  # 删除没有命令在用的版本（--all：全部删除）；或用 rm <version>，或 delink [name]
 ```
 
 ## 用途
@@ -71,7 +71,7 @@ cc2js clean  # 删除全部；或用 rm <version>，或 delink [name]
 ```
 cc2js [<version|latest|stable|tarball|binary>] [options]
 cc2js                  安装/更新最新版为 `cc2`（= cc2js latest）
-cc2js ls | rm <version> | delink [name] | clean   管理已安装的版本与链接
+cc2js ls | rm <version> | delink [name] | clean [--all]   管理已安装的版本与链接
 
 任何版本默认都会安装（装到 ~/.cc2js，作为 PATH 上的 `cc2`）；想要文件夹就加 -o。
 
@@ -102,7 +102,8 @@ cc2js ls | rm <version> | delink [name] | clean   管理已安装的版本与链
   cc2js ls             列出已安装版本与链接
   cc2js rm <version>   删除一个版本（级联 delink）
   cc2js delink [name]  删除一个 launcher（默认：cc2）
-  cc2js clean          删除所有版本与链接（提示 y/N，或 --yes）
+  cc2js clean          删除没有启动命令指向的版本（提示 y/N，或 --yes）
+  cc2js clean --all    删除所有版本与链接，包括正在使用的
   （均接受 --bin-dir <dir>）
 ```
 
